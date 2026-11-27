@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Card, Chart, Kpi, Table, Waterfall } from './ui'
-import { C, ELASTICITIES, HIST_SCENARIO, MARKDOWN, RESTOCK, STRATEGY_SHORT, downloadCsv, num, plus, scenario, signed, tr, usd } from './logic'
+import { C, ELASTICITIES, HIST_SCENARIO, MARKDOWN, RESTOCK, STRATEGY_SHORT, downloadCsv, num, plus, scenario, signed, usd } from './logic'
 
 const EXPORT = ['id', 'store_id', 'dept_id', 'risk_level', 'cluster_name', 'current_price', 'sales_velocity_90d', 'pred_velocity_28d', 'projected_decline_pct', 'intermittency_pct', 'revenue_at_risk_usd', 'price_sensitivity', 'snap_sensitivity', 'snap_priority', 'primary_strategy', 'discount_range', 'suggested_anchor_item', 'snap_tactical_plan', 'tactical_action', 'aviso', 'riesgo_vs_28d_usd']
 const money = (v) => usd(v, 2)
@@ -29,9 +29,9 @@ export default function Simulador({ rows, view, filters }) {
   const points = markdown.filter((r) => r.revenue_at_risk_usd > 0)
 
   const reason = !filters.estrategia.includes(MARKDOWN)
-    ? (view === 'analista' ? 'Marca la estrategia de descuentos en el filtro «Estrategia».' : 'Elige «Probar rebajas» en «¿Qué quieres hacer?».')
+    ? (view === 'analista' ? `Marca «${STRATEGY_SHORT[MARKDOWN]}» en «Acción recomendada».` : 'Elige «Probar rebajas» en «¿Qué quieres hacer?».')
     : !filters.riesgo.some((r) => r !== 'Riesgo Bajo')
-      ? 'Las rebajas solo aplican a riesgo alto o medio: agrega uno en «Nivel de prioridad».'
+      ? `Las rebajas solo aplican a riesgo alto o medio: ${view === 'analista' ? 'marca uno en «Nivel de riesgo»' : 'pulsa «Volver al inicio»'}.`
       : 'Ningún producto de la selección respondió a rebajas en el pasado.'
 
   return (

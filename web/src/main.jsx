@@ -102,10 +102,10 @@ function Dashboard({ diag, reports }) {
   if (filters.tienda.length !== STORES.length) chip('tienda', `Tienda: ${brief(filters.tienda)}`, STORES)
   if (filters.depto.length !== DEPTS.length) chip('depto', `Departamento: ${brief(filters.depto)}`, DEPTS)
   if (filters.q.trim()) chip('q', `Búsqueda: ${filters.q.trim()}`, '')
-  if (filters.riesgo.length !== RISKS.length && action?.key !== 'urgentes') chip('riesgo', `Prioridad: ${brief(filters.riesgo)}`, RISKS)
+  if (filters.riesgo.length !== RISKS.length && action?.key !== 'urgentes') chip('riesgo', `Nivel de riesgo: ${brief(filters.riesgo)}`, RISKS)
   const allStrategies = ACTIONS[0].estrategia
   if (!action && filters.estrategia.length !== allStrategies.length) {
-    chip('estrategia', `Estrategia: ${brief(filters.estrategia.map((x) => STRATEGY_SHORT[x]))}`, allStrategies)
+    chip('estrategia', `Acción recomendada: ${brief(filters.estrategia.map((x) => STRATEGY_SHORT[x]))}`, allStrategies)
   }
   if (filters.grupo.length !== clusters.length) chip('grupo', `Grupo: ${brief(filters.grupo)}`, clusters)
   if (filters.snap) chip('snap', 'Solo sensibles a SNAP', false)
@@ -148,7 +148,7 @@ function Dashboard({ diag, reports }) {
               return (
                 <button key={a.key} type="button" className={on ? 'action active' : 'action'} aria-pressed={on} disabled={!n && !on}
                   onClick={() => setFilters((f) => ({ ...f, riesgo: a.riesgo, estrategia: a.estrategia }))}>
-                  <span>{a.label}<small>{a.desc}</small></span><b>{num(n)}</b>
+                  <span>{a.label}<small>{a.key === 'todo' && view === 'gestor' && filters.usd ? 'Solo con ingreso en riesgo' : a.desc}</small></span><b>{num(n)}</b>
                 </button>
               )
             })}

@@ -179,6 +179,22 @@ export function countRows(diag, view, f) {
   return n
 }
 
+// Nombre con el que cada vista muestra el control que aplica ese filtro.
+function controlName(test, view) {
+  const expert = view === 'analista'
+  const names = {
+    Tiendas: expert ? 'Tiendas' : 'Tienda',
+    Departamentos: expert ? 'Departamentos' : 'Departamento',
+    'Nivel de prioridad': expert ? 'Nivel de riesgo' : '¿Qué quieres hacer?',
+    'Estrategia recomendada': expert ? 'Acción recomendada' : '¿Qué quieres hacer?',
+    'Grupo comercial': 'Grupo (K-Means)',
+    'Solo con ingreso en riesgo': 'Incluir productos con $0 en riesgo',
+    'Solo sensibles a SNAP': 'Solo sensibles a pagos SNAP',
+    'Buscar producto': 'Buscar por código',
+  }
+  return `«${names[test]}»`
+}
+
 export function applyFilters(diag, view, f) {
   const { tests, matches } = buildTests(view, f)
   const all = Object.values(tests)
@@ -189,8 +205,8 @@ export function applyFilters(diag, view, f) {
     const guilty = Object.keys(tests).filter((n) =>
       diag.some((r) => Object.entries(tests).every(([m, t]) => m === n || t(r))))
     reason = guilty.length
-      ? `Revisa: ${guilty.join(', ')}. Al ampliar cualquiera de ellos vuelven los resultados.`
-      : 'Hay más de un filtro que deja la selección vacía. Usa «Restablecer filtros».'
+      ? `Revisa: ${[...new Set(guilty.map((n) => controlName(n, view)))].join(', ')}. Al ampliar cualquiera de ellos vuelven los resultados.`
+      : 'Hay más de un filtro que deja la selección vacía. Usa «Volver al inicio».'
   }
   return { rows, scope, reason }
 }

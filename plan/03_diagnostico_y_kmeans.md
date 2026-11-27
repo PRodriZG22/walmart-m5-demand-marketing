@@ -45,6 +45,10 @@ Aplicar las reglas exactas usando las constantes de `src/config.py`:
 
 ---
 
+> **Avisos de presentación (no cambian la regla):** el tablero marca «Casi sin ventas» a las series de riesgo bajo con intermitencia de 70% o más, y «Alerta sin monto en riesgo» a las de riesgo alto o medio con ingreso en riesgo 0.
+
+---
+
 ## 3. Segmentación no supervisada K-Means
 
 1. **Variables de entrada al clustering:**

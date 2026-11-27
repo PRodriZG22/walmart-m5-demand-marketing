@@ -1,0 +1,282 @@
+{
+  "status": "PASS",
+  "elapsed_seconds": 12.45,
+  "total_series": 5748,
+  "total_revenue_at_risk_usd": 59362.23,
+  "total_units_at_risk_28d": 22113.87,
+  "has_price_promo_history_count": 1789,
+  "price_elastic_count": 755,
+  "snap_sensitive_10pct_count": 2557,
+  "snap_priority_15pct_count": 1831,
+  "snap_priority_revenue_at_risk_usd": 24009.32,
+  "store_p80_thresholds_usd": {
+    "CA_1": 12.8194,
+    "CA_2": 9.5151,
+    "CA_3": 20.1437,
+    "CA_4": 6.7991
+  },
+  "risk_by_level": [
+    {
+      "risk_level": "Riesgo Alto",
+      "sku_count": 125,
+      "revenue_at_risk_usd": 10633.899855929629,
+      "sku_pct": 2.1746694502435626,
+      "rev_pct": 17.913577352195848
+    },
+    {
+      "risk_level": "Riesgo Bajo",
+      "sku_count": 2505,
+      "revenue_at_risk_usd": 10031.892216742473,
+      "sku_pct": 43.580375782881006,
+      "rev_pct": 16.89945172027366
+    },
+    {
+      "risk_level": "Riesgo Medio",
+      "sku_count": 3118,
+      "revenue_at_risk_usd": 38696.44276662494,
+      "sku_pct": 54.24495476687543,
+      "rev_pct": 65.18697092753048
+    }
+  ],
+  "risk_by_store": [
+    {
+      "store_id": "CA_1",
+      "sku_count": 1437,
+      "high_risk_skus": 21,
+      "med_risk_skus": 810,
+      "low_risk_skus": 606,
+      "revenue_at_risk_usd": 15039.258045072107,
+      "p80_threshold_usd": 12.819411743695891
+    },
+    {
+      "store_id": "CA_2",
+      "sku_count": 1437,
+      "high_risk_skus": 29,
+      "med_risk_skus": 784,
+      "low_risk_skus": 624,
+      "revenue_at_risk_usd": 11470.950006308625,
+      "p80_threshold_usd": 9.515055851102387
+    },
+    {
+      "store_id": "CA_3",
+      "sku_count": 1437,
+      "high_risk_skus": 41,
+      "med_risk_skus": 765,
+      "low_risk_skus": 631,
+      "revenue_at_risk_usd": 25363.344571647005,
+      "p80_threshold_usd": 20.14368060281305
+    },
+    {
+      "store_id": "CA_4",
+      "sku_count": 1437,
+      "high_risk_skus": 34,
+      "med_risk_skus": 759,
+      "low_risk_skus": 644,
+      "revenue_at_risk_usd": 7488.682216269302,
+      "p80_threshold_usd": 6.799108143318789
+    }
+  ],
+  "kmeans": {
+    "features": [
+      "sales_velocity_28d",
+      "intermittency_pct",
+      "projected_decline_pct",
+      "revenue_at_risk_usd",
+      "price_sensitivity",
+      "snap_sensitivity"
+    ],
+    "raw_min_cluster_pct_by_k": {
+      "2": 20.0765,
+      "3": 0.087,
+      "4": 0.087,
+      "5": 0.087,
+      "6": 0.087
+    },
+    "winsorization_applied": true,
+    "winsorization_bounds": {
+      "sales_velocity_28d": {
+        "lower_clip": 0.0,
+        "upper_clip": 16.8214
+      },
+      "intermittency_pct": {
+        "lower_clip": 0.0912,
+        "upper_clip": 90.9726
+      },
+      "projected_decline_pct": {
+        "lower_clip": 0.0,
+        "upper_clip": 34.112
+      },
+      "revenue_at_risk_usd": {
+        "lower_clip": 0.0,
+        "upper_clip": 138.417
+      },
+      "price_sensitivity": {
+        "lower_clip": -0.9728,
+        "upper_clip": 3.5123
+      },
+      "snap_sensitivity": {
+        "lower_clip": -0.2456,
+        "upper_clip": 0.5711
+      }
+    },
+    "selected_k": 4,
+    "selected_silhouette": 0.2824,
+    "evaluation": [
+      {
+        "k": 2,
+        "wcss": 25887.395140840737,
+        "silhouette_score": 0.39849580082347524,
+        "min_cluster_size": 1126,
+        "min_cluster_pct": 19.589422407794014,
+        "max_cluster_size": 4622,
+        "max_cluster_pct": 80.410577592206
+      },
+      {
+        "k": 3,
+        "wcss": 22140.324551196027,
+        "silhouette_score": 0.23475213050115384,
+        "min_cluster_size": 652,
+        "min_cluster_pct": 11.343075852470424,
+        "max_cluster_size": 3378,
+        "max_cluster_pct": 58.76826722338204
+      },
+      {
+        "k": 4,
+        "wcss": 19060.632668420152,
+        "silhouette_score": 0.28242260465552976,
+        "min_cluster_size": 228,
+        "min_cluster_pct": 3.966597077244259,
+        "max_cluster_size": 3545,
+        "max_cluster_pct": 61.67362560890744
+      },
+      {
+        "k": 5,
+        "wcss": 16394.678475664114,
+        "silhouette_score": 0.23559719574613827,
+        "min_cluster_size": 197,
+        "min_cluster_pct": 3.427279053583855,
+        "max_cluster_size": 2394,
+        "max_cluster_pct": 41.64926931106472
+      },
+      {
+        "k": 6,
+        "wcss": 14086.667509891173,
+        "silhouette_score": 0.2560387225073681,
+        "min_cluster_size": 197,
+        "min_cluster_pct": 3.427279053583855,
+        "max_cluster_size": 2303,
+        "max_cluster_pct": 40.0661099512874
+      }
+    ],
+    "profiles": [
+      {
+        "cluster_id": 3,
+        "cluster_name": "Desaceleración Crítica e Ingreso en Riesgo",
+        "sku_count": 653,
+        "portfolio_pct": 11.360473208072372,
+        "sales_velocity_28d_mean": 3.7422883395318314,
+        "intermittency_pct_mean": 31.95035386006835,
+        "projected_decline_pct_mean": 20.37591327436529,
+        "revenue_at_risk_usd_mean": 66.04420860877002,
+        "revenue_at_risk_usd_total": 43126.86822152682,
+        "revenue_at_risk_share_pct": 72.65034468172917,
+        "price_sensitivity_mean": -0.29779193282856253,
+        "snap_sensitivity_mean": 0.11689339895459504,
+        "pct_high_risk": 12.710566615620214,
+        "pct_med_risk": 81.92955589586524,
+        "pct_low_risk": 5.359877488514548
+      },
+      {
+        "cluster_id": 1,
+        "cluster_name": "Alta Rotación y Productos Ancla",
+        "sku_count": 1322,
+        "portfolio_pct": 22.999304105775924,
+        "sales_velocity_28d_mean": 4.671223254808732,
+        "intermittency_pct_mean": 24.8670981087773,
+        "projected_decline_pct_mean": 3.0579128286597856,
+        "revenue_at_risk_usd_mean": 6.889262816103943,
+        "revenue_at_risk_usd_total": 9107.605442889413,
+        "revenue_at_risk_share_pct": 15.342423457514935,
+        "price_sensitivity_mean": -0.23178762127871458,
+        "snap_sensitivity_mean": 0.09552238533267017,
+        "pct_high_risk": 0.0,
+        "pct_med_risk": 16.338880484114977,
+        "pct_low_risk": 83.66111951588502
+      },
+      {
+        "cluster_id": 2,
+        "cluster_name": "Cola Larga de Baja Rotación e Intermitencia",
+        "sku_count": 3545,
+        "portfolio_pct": 61.67362560890744,
+        "sales_velocity_28d_mean": 0.8817751360064476,
+        "intermittency_pct_mean": 62.356937868191885,
+        "projected_decline_pct_mean": 1.4791342492761161,
+        "revenue_at_risk_usd_mean": 1.5242761297934646,
+        "revenue_at_risk_usd_total": 5403.558880117832,
+        "revenue_at_risk_share_pct": 9.102687752147673,
+        "price_sensitivity_mean": -0.1754897487609397,
+        "snap_sensitivity_mean": 0.0958744703570797,
+        "pct_high_risk": 0.4795486600846262,
+        "pct_med_risk": 64.14668547249647,
+        "pct_low_risk": 35.373765867418896
+      },
+      {
+        "cluster_id": 0,
+        "cluster_name": "Intermitentes de Alta Elasticidad Promocional",
+        "sku_count": 228,
+        "portfolio_pct": 3.966597077244259,
+        "sales_velocity_28d_mean": 1.676378446115288,
+        "intermittency_pct_mean": 70.7043902785531,
+        "projected_decline_pct_mean": 3.968203719970488,
+        "revenue_at_risk_usd_mean": 7.56229076650431,
+        "revenue_at_risk_usd_total": 1724.2022947629825,
+        "revenue_at_risk_share_pct": 2.904544108608227,
+        "price_sensitivity_mean": 6.200557780870759,
+        "snap_sensitivity_mean": 0.09746198248285677,
+        "pct_high_risk": 10.964912280701753,
+        "pct_med_risk": 40.78947368421053,
+        "pct_low_risk": 48.24561403508772
+      }
+    ]
+  },
+  "strategy_mix": [
+    {
+      "primary_strategy": "Cross-Selling y Visibilidad Omnicanal (Sin Descuento)",
+      "sku_count": 2818,
+      "revenue_at_risk_usd": 43336.21869874496,
+      "snap_priority_overlap": 920,
+      "sku_pct": 49.02574808629088,
+      "rev_pct": 73.00301077960249
+    },
+    {
+      "primary_strategy": "Mantenimiento EDLP y Producto Ancla",
+      "sku_count": 1725,
+      "revenue_at_risk_usd": 7272.0826497171465,
+      "snap_priority_overlap": 0,
+      "sku_pct": 30.010438413361168,
+      "rev_pct": 12.250351876750974
+    },
+    {
+      "primary_strategy": "Precios Dinámicos / Markdown (20%–35%)",
+      "sku_count": 425,
+      "revenue_at_risk_usd": 5994.123923809606,
+      "snap_priority_overlap": 131,
+      "sku_pct": 7.393876130828114,
+      "rev_pct": 10.097537500123853
+    },
+    {
+      "primary_strategy": "Sincronización SNAP (Base EDLP)",
+      "sku_count": 780,
+      "revenue_at_risk_usd": 2759.809567025326,
+      "snap_priority_overlap": 780,
+      "sku_pct": 13.569937369519833,
+      "rev_pct": 4.649099843522682
+    }
+  ],
+  "figures_generated": [
+    "fig05_risk_distribution_store_dept.png",
+    "fig06_kmeans_elbow_silhouette.png",
+    "fig07_kmeans_cluster_profiles.png",
+    "fig08_prescriptive_marketing_revenue_risk.png"
+  ]
+}

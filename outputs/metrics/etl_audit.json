@@ -1,0 +1,60 @@
+{
+  "status": "PASS",
+  "elapsed_seconds": 37.01,
+  "row_counts": {
+    "raw_long_including_buffer_and_future": 6805632,
+    "prelaunch_rows_removed": 682592,
+    "post_launch_null_prices_ffilled": 0,
+    "active_sales_3y_rows": 5710335,
+    "cold_start_rows_dropped_from_features_3y": 86627,
+    "features_3y_rows": 5623708,
+    "future_28d_features_rows": 160944,
+    "future_nans_imputed_with_zero": 0
+  },
+  "series_coverage": {
+    "active_sales_3y_unique_series": 5748,
+    "features_3y_unique_series": 5748,
+    "future_28d_unique_series": 5748
+  },
+  "intermittency_3y_active": {
+    "zero_sales_days": 2848868,
+    "total_active_days": 5710335,
+    "global_intermittency_pct": 49.8897
+  },
+  "memory_optimization": {
+    "ram_before_downcast_mb": 1031.38,
+    "ram_after_downcast_mb": 193.09,
+    "ram_reduction_pct": 81.28
+  },
+  "output_files_mb": {
+    "active_sales_3y.parquet": 20.03,
+    "features_3y.parquet": 39.35,
+    "future_28d_features.parquet": 1.16
+  },
+  "integrity_checks": {
+    "duplicates_id_date": 0,
+    "invalid_sell_price_le_zero_or_null": 0,
+    "negative_units_sold": 0,
+    "calendar_gaps_post_launch": 0,
+    "future_feature_nans_after_check": 0,
+    "anti_leakage_sample_test_n200": "PASS"
+  },
+  "feature_columns": [
+    "lag_28",
+    "lag_35",
+    "lag_56",
+    "rolling_mean_7",
+    "rolling_mean_28",
+    "sell_price",
+    "price_change",
+    "relative_price",
+    "wday",
+    "month",
+    "year",
+    "event_type_1_code",
+    "snap_CA",
+    "item_code",
+    "dept_code",
+    "store_code"
+  ]
+}

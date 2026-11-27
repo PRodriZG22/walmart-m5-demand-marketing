@@ -1,0 +1,42 @@
+{
+  "status": "PASS",
+  "base_docx": "C:\\Users\\Piero\\Antigravity\\walmart-m5-demand-marketing\\docs\\Walmart informe final .docx",
+  "output_docx": "C:\\Users\\Piero\\Antigravity\\walmart-m5-demand-marketing\\outputs\\Walmart_Informe_Final_COMPLETO.docx",
+  "output_size_mb": 3.81,
+  "native_omath_equations_preserved": 127,
+  "base_counts": {
+    "paragraphs": 228,
+    "tables": 5,
+    "inline_images": 0
+  },
+  "inserted_counts": {
+    "empirical_data_tables": 11,
+    "screenshot_placeholder_boxes": 0,
+    "figures_embedded": 11
+  },
+  "final_verified_counts": {
+    "paragraphs": 312,
+    "tables_total": 16,
+    "inline_images": 11
+  },
+  "base_consistency_edits": {
+    "cover_faculty_updated": true,
+    "cover_members_updated": 4,
+    "paso8_updated": true,
+    "paso9_updated": true,
+    "sec72_note_added": true,
+    "thousands_unified_count": 39
+  },
+  "heading_1_outline": [
+    "1. Portada básica",
+    "2. Descripción de la Empresa: Walmart Inc.",
+    "3. Realidad Problemática y Justificación (\"La Brecha\")",
+    "4. Objetivos del Proyecto",
+    "5. Marco Teórico",
+    "6. Metodología (CRISP-DM) y Definición de Variables",
+    "7. Diagnóstico Comercial, Segmentación K-Means y Plan Estratégico de Marketing",
+    "8. Resultados Empíricos del Prototipo",
+    "9. Conclusiones y Recomendaciones",
+    "10. Referencias Bibliográficas"
+  ]
+}

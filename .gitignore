@@ -1,0 +1,36 @@
+# Virtual environments
+.venv/
+venv/
+
+# Python cache & bytecode
+__pycache__/
+*.py[cod]
+
+# Local AI agent skills / editor cache
+.agent/
+
+# Jupyter notebooks
+.ipynb_checkpoints/
+
+# Raw Kaggle M5 CSVs (310+ MB, downloaded locally only for full retraining)
+data/raw/*.csv
+
+# Heavy processed parquet datasets (local pipeline only)
+data/processed/*.parquet
+data/processed/active_sales_3y.parquet
+data/processed/features_3y.parquet
+data/processed/future_28d_features.parquet
+
+# Lightweight processed parquets required by Streamlit Community Cloud
+!data/processed/dashboard_sales_90d.parquet
+!data/processed/val_window4_predictions.parquet
+!data/processed/forecast_28d.parquet
+
+# Serialized models & binary artifacts
+*.joblib
+*.pkl
+
+# OS & Office temporary files
+.DS_Store
+Thumbs.db
+~$*

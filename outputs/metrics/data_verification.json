@@ -1,0 +1,150 @@
+{
+  "status": "PASS",
+  "python_version": "3.14.3",
+  "packages": {
+    "pandas": "3.1.1",
+    "numpy": "2.5.5",
+    "scikit-learn": "1.9.1",
+    "pyarrow": "26.0.1",
+    "matplotlib": "3.11.2",
+    "seaborn": "0.13.2",
+    "plotly": "7.2.0",
+    "streamlit": "1.67.0",
+    "joblib": "1.6.0"
+  },
+  "rf_params": {
+    "n_estimators": 100,
+    "max_depth": 16,
+    "min_samples_leaf": 25,
+    "max_samples": 0.3,
+    "max_features": "sqrt",
+    "random_state": 42,
+    "n_jobs": 6
+  },
+  "raw_files_mb": {
+    "sales_train_evaluation.csv": 116.1,
+    "calendar.csv": 0.1,
+    "sell_prices.csv": 193.97
+  },
+  "calendar": {
+    "total_days": 1969,
+    "first_day": "d_1",
+    "first_date": "2011-01-29",
+    "last_train_day": "d_1941",
+    "last_train_date": "2016-05-22",
+    "last_forecast_day": "d_1969",
+    "last_forecast_date": "2016-06-19",
+    "buffer_range": {
+      "start_d": "d_786",
+      "end_d": "d_845",
+      "start_date": "2013-03-24",
+      "end_date": "2013-05-22",
+      "days": 60
+    },
+    "history_3y_range": {
+      "start_d": "d_846",
+      "end_d": "d_1941",
+      "start_date": "2013-05-23",
+      "end_date": "2016-05-22",
+      "days": 1096
+    },
+    "future_28d_range": {
+      "start_d": "d_1942",
+      "end_d": "d_1969",
+      "start_date": "2016-05-23",
+      "end_date": "2016-06-19",
+      "days": 28
+    },
+    "rolling_windows": [
+      {
+        "window": 1,
+        "start_d": "d_1830",
+        "end_d": "d_1857",
+        "start_date": "2016-02-01",
+        "end_date": "2016-02-28",
+        "days": 28
+      },
+      {
+        "window": 2,
+        "start_d": "d_1858",
+        "end_d": "d_1885",
+        "start_date": "2016-02-29",
+        "end_date": "2016-03-27",
+        "days": 28
+      },
+      {
+        "window": 3,
+        "start_d": "d_1886",
+        "end_d": "d_1913",
+        "start_date": "2016-03-28",
+        "end_date": "2016-04-24",
+        "days": 28
+      },
+      {
+        "window": 4,
+        "start_d": "d_1914",
+        "end_d": "d_1941",
+        "start_date": "2016-04-25",
+        "end_date": "2016-05-22",
+        "days": 28
+      }
+    ]
+  },
+  "sales_scope": {
+    "total_rows_raw": 30490,
+    "day_columns_count": 1941,
+    "category": "FOODS",
+    "state": "CA",
+    "stores": [
+      "CA_1",
+      "CA_2",
+      "CA_3",
+      "CA_4"
+    ],
+    "departments": [
+      "FOODS_1",
+      "FOODS_2",
+      "FOODS_3"
+    ],
+    "unique_items": 1437,
+    "total_series": 5748,
+    "unique_items_by_dept": {
+      "FOODS_1": 216,
+      "FOODS_2": 398,
+      "FOODS_3": 823
+    },
+    "series_by_store_dept": {
+      "CA_1": {
+        "FOODS_1": 216,
+        "FOODS_2": 398,
+        "FOODS_3": 823
+      },
+      "CA_2": {
+        "FOODS_1": 216,
+        "FOODS_2": 398,
+        "FOODS_3": 823
+      },
+      "CA_3": {
+        "FOODS_1": 216,
+        "FOODS_2": 398,
+        "FOODS_3": 823
+      },
+      "CA_4": {
+        "FOODS_1": 216,
+        "FOODS_2": 398,
+        "FOODS_3": 823
+      }
+    }
+  },
+  "prices_scope": {
+    "total_rows_raw": 6841121,
+    "scope_rows": 1253433,
+    "unique_items": 1437,
+    "unique_stores": 4,
+    "future_horizon_series_with_price": 5748,
+    "min_price_usd": 0.01,
+    "max_price_usd": 19.48,
+    "null_prices": 0,
+    "non_positive_prices": 0
+  }
+}

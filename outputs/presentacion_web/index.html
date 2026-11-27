@@ -1,0 +1,3105 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pronóstico de Demanda con Random Forest — Walmart California (FOODS) · UNDC 2026</title>
+
+    <!-- Google Fonts: Plus Jakarta Sans (Display & Body) + IBM Plex Mono (Tags & Tabular IDs) -->
+    <!-- Carga no bloqueante para apertura instantánea incluso offline en aula -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" media="print" onload="this.media='all'">
+    <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap"></noscript>
+
+    <style>
+        /* ==========================================================================
+           1. THEME TOKENS — WALMART CORPORATIVO MODERNO (ESTILO MCKINSEY / EJECUTIVO)
+           Modifica estas variables :root para personalizar paleta y tipografía.
+           ========================================================================== */
+        :root {
+            /* Paleta oficial Walmart Corporativo */
+            --navy: #081C30;
+            --navy-soft: #102A43;
+            --walmart-blue: #0071CE;
+            --walmart-blue-dark: #004F9A;
+            --walmart-blue-tint: #EFF6FF;
+            --spark-yellow: #FFC220;
+            --spark-yellow-tint: #FFFBEB;
+
+            /* Lienzo claro y superficies (Slides 2–11) */
+            --canvas: #F8FAFC;
+            --surface: #FFFFFF;
+            --surface-muted: #F1F5F9;
+            --border: #E2E8F0;
+            --border-strong: #CBD5E1;
+
+            /* Jerarquía de texto */
+            --ink-primary: #0F172A;
+            --ink-secondary: #475569;
+            --ink-muted: #64748B;
+
+            /* Semántica de datos */
+            --danger: #DC2626;
+            --danger-tint: #FEF2F2;
+            --emerald: #0D9488;
+            --emerald-tint: #F0FDFA;
+            --amber: #D97706;
+
+            /* Stage defaults (viewport-base.css) */
+            --stage-bg: #040D17;
+            --slide-bg: var(--canvas);
+
+            /* Tipografía */
+            --font-sans: 'Plus Jakarta Sans', 'Segoe UI', system-ui, -apple-system, sans-serif;
+            --font-mono: 'IBM Plex Mono', 'Consolas', monospace;
+
+            /* Animaciones */
+            --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+            --dur-fast: 0.35s;
+            --dur-normal: 0.5s;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        /* ===========================================
+           FIXED 16:9 STAGE: MANDATORY BASE STYLES
+           Include this ENTIRE file in every presentation.
+           Slides are authored at 1920×1080 and scaled as a whole.
+           =========================================== */
+
+        /* 1. Lock the browser viewport */
+        html,
+        body {
+            width: 100%;
+            height: 100%;
+            margin: 0;
+            overflow: hidden;
+            background: var(--stage-bg, #000);
+            font-family: var(--font-sans);
+            color: var(--ink-primary);
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+
+        /* 2. Full-window deck viewport */
+        .deck-viewport {
+            position: fixed;
+            inset: 0;
+            overflow: hidden;
+            background: var(--stage-bg, #000);
+        }
+
+        /* 3. Fixed 16:9 design canvas.
+           JavaScript sets transform: translate(...) scale(...). */
+        .deck-stage {
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 1920px;
+            height: 1080px;
+            overflow: hidden;
+            transform-origin: 0 0;
+            background: var(--slide-bg, #fff);
+            box-shadow: 0 28px 90px rgba(0, 0, 0, 0.55);
+        }
+
+        /* 4. Slides stack inside the fixed stage.
+           Content must be laid out at 1920×1080, not reflowed per device. */
+        .slide {
+            position: absolute;
+            inset: 0;
+            width: 1920px;
+            height: 1080px;
+            overflow: hidden;
+            display: block;
+            visibility: hidden;
+            opacity: 0;
+            pointer-events: none;
+            background: var(--slide-bg, #fff);
+            transition: opacity 0.28s ease;
+        }
+
+        .slide.active,
+        .slide.visible {
+            visibility: visible;
+            opacity: 1;
+            pointer-events: auto;
+            z-index: 1;
+        }
+
+        /* 5. Keep media inside authored slide bounds */
+        img,
+        video,
+        canvas,
+        svg {
+            max-width: 100%;
+            max-height: 100%;
+        }
+
+        /* 6. Presentation chrome stays outside the slide design system */
+        .deck-controls {
+            position: fixed;
+            left: 50%;
+            bottom: 22px;
+            transform: translateX(-50%);
+            z-index: 1000;
+        }
+
+        /* 7. Print one fixed-size slide per page */
+        @media print {
+            @page {
+                size: 1920px 1080px;
+                margin: 0;
+            }
+
+            html,
+            body {
+                width: 1920px;
+                height: auto;
+                overflow: visible;
+                background: #fff;
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+            }
+
+            .deck-viewport {
+                position: static;
+                overflow: visible;
+                background: #fff;
+            }
+
+            .deck-stage {
+                position: static;
+                width: auto;
+                height: auto;
+                transform: none !important;
+                background: none;
+                box-shadow: none;
+            }
+
+            .slide {
+                position: relative;
+                display: block !important;
+                visibility: visible !important;
+                opacity: 1 !important;
+                pointer-events: auto !important;
+                width: 1920px;
+                height: 1080px;
+                break-after: page;
+                page-break-after: always;
+            }
+
+            .slide:last-child {
+                break-after: auto;
+                page-break-after: auto;
+            }
+
+            .slide .reveal {
+                opacity: 1 !important;
+                transform: none !important;
+            }
+
+            .deck-controls,
+            .top-progress,
+            .edit-hotzone,
+            .edit-toggle,
+            .edit-banner,
+            .notes-drawer {
+                display: none !important;
+            }
+        }
+
+        /* 8. Reduced motion */
+        @media (prefers-reduced-motion: reduce) {
+            *,
+            *::before,
+            *::after {
+                animation-duration: 0.01ms !important;
+                transition-duration: 0.2s !important;
+            }
+        }
+
+        /* ==========================================================================
+           2. REVEAL ANIMATIONS (EJECUTIVO: RÁPIDAS Y NÍTIDAS)
+           ========================================================================== */
+        .reveal {
+            opacity: 0;
+            transform: translateY(18px);
+            transition: opacity var(--dur-normal) var(--ease-out-expo),
+                        transform var(--dur-normal) var(--ease-out-expo);
+        }
+
+        .slide.visible .reveal {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .reveal.d1 { transition-delay: 0.05s; }
+        .reveal.d2 { transition-delay: 0.12s; }
+        .reveal.d3 { transition-delay: 0.19s; }
+        .reveal.d4 { transition-delay: 0.26s; }
+        .reveal.d5 { transition-delay: 0.33s; }
+
+        /* Utilidad numérica tabular para cifras exactas */
+        .num {
+            font-variant-numeric: tabular-nums;
+        }
+
+        /* ==========================================================================
+           3. SLIDE SHELL — LIGHT CONTENT SLIDES (SLIDES 2–11)
+           ========================================================================== */
+        .slide-light {
+            background: var(--canvas);
+        }
+
+        /* Barra corporativa superior (Azul Walmart + acento Spark) */
+        .brand-topbar {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 6px;
+            background: var(--walmart-blue);
+            z-index: 4;
+        }
+        .brand-topbar::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            right: 0;
+            width: 260px;
+            height: 6px;
+            background: var(--spark-yellow);
+        }
+
+        .slide-shell {
+            width: 1920px;
+            height: 1080px;
+            padding: 46px 68px 34px 68px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            position: relative;
+        }
+
+        .slide-header {
+            flex: 0 0 auto;
+            padding-bottom: 18px;
+            border-bottom: 1px solid var(--border);
+            position: relative;
+        }
+        .slide-header::after {
+            content: '';
+            position: absolute;
+            left: 0;
+            bottom: -2px;
+            width: 76px;
+            height: 3px;
+            background: var(--spark-yellow);
+            border-radius: 2px;
+        }
+
+        .header-meta {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 8px;
+        }
+
+        .eyebrow {
+            font-family: var(--font-mono);
+            font-size: 14px;
+            font-weight: 600;
+            letter-spacing: 0.11em;
+            text-transform: uppercase;
+            color: var(--walmart-blue);
+        }
+
+        .speaker-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 5px 14px;
+            border-radius: 999px;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--ink-secondary);
+        }
+        .speaker-chip .dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--walmart-blue);
+        }
+
+        .slide-title {
+            font-size: 40px;
+            font-weight: 800;
+            line-height: 1.13;
+            letter-spacing: -0.025em;
+            color: var(--navy);
+        }
+
+        .slide-body {
+            flex: 1 1 auto;
+            padding: 24px 0 18px 0;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            min-height: 0;
+            overflow: hidden;
+        }
+
+        .slide-footer {
+            flex: 0 0 auto;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding-top: 12px;
+            border-top: 1px solid var(--border);
+            font-size: 14px;
+            color: var(--ink-muted);
+            font-weight: 500;
+        }
+        .slide-footer .slide-num {
+            font-family: var(--font-mono);
+            font-weight: 600;
+            color: var(--navy);
+            font-size: 15px;
+        }
+
+        /* Tarjetas blancas estándar */
+        .card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            box-shadow: 0 4px 18px rgba(15, 23, 42, 0.04);
+        }
+
+        .figure-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            box-shadow: 0 6px 22px rgba(15, 23, 42, 0.05);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 16px 20px;
+            overflow: hidden;
+        }
+        .figure-card img {
+            width: auto;
+            height: auto;
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+            display: block;
+        }
+
+        /* ==========================================================================
+           4. DARK HERO & CLOSING SLIDES (SLIDE 1 Y SLIDE 12 ÚNICAMENTE)
+           ========================================================================== */
+        .slide-dark {
+            background:
+                radial-gradient(ellipse 72% 65% at 86% 18%, rgba(0, 113, 206, 0.34) 0%, transparent 62%),
+                radial-gradient(ellipse 50% 45% at 10% 88%, rgba(255, 194, 32, 0.11) 0%, transparent 58%),
+                linear-gradient(135deg, #061524 0%, var(--navy) 55%, #0B2540 100%);
+            color: #FFFFFF;
+        }
+
+        .dark-grid-overlay {
+            position: absolute;
+            inset: 0;
+            background-image:
+                linear-gradient(rgba(255, 255, 255, 0.032) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255, 255, 255, 0.032) 1px, transparent 1px);
+            background-size: 72px 72px;
+            pointer-events: none;
+        }
+
+        .dark-accent-edge {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 12px;
+            height: 100%;
+            background: linear-gradient(180deg, var(--spark-yellow) 0%, var(--walmart-blue) 52%, #004F9A 100%);
+        }
+
+        .dark-shell {
+            position: relative;
+            z-index: 2;
+            width: 1920px;
+            height: 1080px;
+            padding: 64px 96px 56px 104px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+
+        .dark-topbar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .brand-lockup {
+            display: inline-flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .brand-tag {
+            font-family: var(--font-mono);
+            font-size: 15px;
+            font-weight: 600;
+            letter-spacing: 0.14em;
+            text-transform: uppercase;
+            color: #93C5FD;
+        }
+
+        .course-pill {
+            padding: 9px 20px;
+            border-radius: 999px;
+            border: 1px solid rgba(255, 194, 32, 0.38);
+            background: rgba(255, 194, 32, 0.09);
+            color: var(--spark-yellow);
+            font-size: 15px;
+            font-weight: 700;
+            letter-spacing: 0.04em;
+        }
+
+        .hero-center {
+            max-width: 1520px;
+        }
+
+        .spark-rule {
+            width: 92px;
+            height: 6px;
+            background: var(--spark-yellow);
+            border-radius: 3px;
+            margin-bottom: 30px;
+        }
+
+        .hero-title {
+            font-size: 70px;
+            font-weight: 800;
+            line-height: 1.07;
+            letter-spacing: -0.03em;
+            color: #FFFFFF;
+            margin-bottom: 28px;
+        }
+        .hero-title .accent {
+            color: var(--spark-yellow);
+        }
+
+        .hero-subtitle {
+            font-size: 25px;
+            font-weight: 500;
+            line-height: 1.45;
+            color: #CBD5E1;
+            max-width: 1120px;
+            margin-bottom: 40px;
+        }
+
+        .hero-telemetry {
+            display: inline-flex;
+            gap: 16px;
+            flex-wrap: nowrap;
+        }
+        .telemetry-pill {
+            padding: 12px 22px;
+            border-radius: 12px;
+            background: rgba(255, 255, 255, 0.06);
+            border: 1px solid rgba(255, 255, 255, 0.14);
+            display: inline-flex;
+            align-items: baseline;
+            gap: 10px;
+        }
+        .telemetry-pill strong {
+            font-size: 22px;
+            font-weight: 800;
+            color: #FFFFFF;
+        }
+        .telemetry-pill span {
+            font-size: 15px;
+            color: #94A3B8;
+            font-weight: 500;
+        }
+
+        .team-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 20px;
+            border-top: 1px solid rgba(255, 255, 255, 0.14);
+            padding-top: 26px;
+        }
+        .team-card {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.11);
+            border-radius: 14px;
+            padding: 18px 22px;
+        }
+        .team-card .block-label {
+            font-family: var(--font-mono);
+            font-size: 12px;
+            font-weight: 600;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            color: var(--spark-yellow);
+            margin-bottom: 6px;
+        }
+        .team-card .member-name {
+            font-size: 19px;
+            font-weight: 700;
+            color: #FFFFFF;
+            line-height: 1.25;
+        }
+
+        /* ==========================================================================
+           5. SLIDE-SPECIFIC LAYOUTS (10 LAYOUTS DISTINTOS — ZERO REPETICIÓN)
+           ========================================================================== */
+
+        /* --- SLIDE 2: 3 COLUMNAS EDITORIALES + BANNER LA BRECHA --- */
+        .s2-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 28px;
+            margin-bottom: 28px;
+        }
+        .pillar-card {
+            padding: 36px 34px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            height: 516px;
+            position: relative;
+            overflow: hidden;
+        }
+        .pillar-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 6px;
+        }
+        .pillar-card.p-blue::before { background: var(--walmart-blue); }
+        .pillar-card.p-red::before { background: var(--danger); }
+        .pillar-card.p-gold::before { background: var(--spark-yellow); }
+
+        .pillar-num {
+            font-family: var(--font-mono);
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--ink-muted);
+            letter-spacing: 0.08em;
+        }
+        .pillar-stat {
+            font-size: 66px;
+            font-weight: 800;
+            letter-spacing: -0.03em;
+            line-height: 1.02;
+            margin: 18px 0 12px 0;
+        }
+        .p-blue .pillar-stat { color: var(--walmart-blue); }
+        .p-red .pillar-stat { color: var(--danger); }
+        .p-gold .pillar-stat { color: var(--navy); }
+
+        .pillar-heading {
+            font-size: 26px;
+            font-weight: 800;
+            color: var(--navy);
+            margin-bottom: 14px;
+            line-height: 1.2;
+        }
+        .pillar-desc {
+            font-size: 20px;
+            line-height: 1.5;
+            color: var(--ink-secondary);
+        }
+        .pillar-tag {
+            display: inline-block;
+            align-self: flex-start;
+            padding: 7px 14px;
+            border-radius: 8px;
+            background: var(--surface-muted);
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--ink-secondary);
+        }
+
+        .gap-banner {
+            height: 196px;
+            border-radius: 18px;
+            background: var(--navy);
+            color: #FFFFFF;
+            padding: 32px 44px;
+            display: flex;
+            align-items: center;
+            gap: 40px;
+            border-left: 10px solid var(--spark-yellow);
+            box-shadow: 0 10px 28px rgba(8, 28, 48, 0.16);
+        }
+        .gap-badge {
+            flex: 0 0 auto;
+            padding: 12px 24px;
+            border-radius: 12px;
+            background: rgba(255, 194, 32, 0.16);
+            border: 1px solid rgba(255, 194, 32, 0.5);
+            color: var(--spark-yellow);
+            font-family: var(--font-mono);
+            font-size: 18px;
+            font-weight: 600;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+        }
+        .gap-text {
+            font-size: 26px;
+            font-weight: 700;
+            line-height: 1.38;
+            color: #F8FAFC;
+        }
+        .gap-text span {
+            color: var(--spark-yellow);
+        }
+
+        /* --- SLIDE 3: 5 HERO METRICS + 4 STEPPER OBJETIVOS + TRANSPARENCIA --- */
+        .s3-metrics {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        .hero-stat-card {
+            padding: 26px 24px;
+            text-align: left;
+            border-top: 5px solid var(--walmart-blue);
+        }
+        .hero-stat-card.spark-accent {
+            border-top-color: var(--spark-yellow);
+            background: #FFFCF2;
+        }
+        .hero-stat-val {
+            font-size: 52px;
+            font-weight: 800;
+            letter-spacing: -0.03em;
+            color: var(--navy);
+            line-height: 1.05;
+            margin-bottom: 8px;
+        }
+        .hero-stat-card.spark-accent .hero-stat-val {
+            color: var(--walmart-blue);
+        }
+        .hero-stat-lbl {
+            font-size: 17px;
+            font-weight: 700;
+            color: var(--ink-primary);
+            margin-bottom: 4px;
+        }
+        .hero-stat-sub {
+            font-size: 14px;
+            color: var(--ink-muted);
+            font-weight: 500;
+        }
+
+        .s3-section-label {
+            font-family: var(--font-mono);
+            font-size: 14px;
+            font-weight: 600;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            color: var(--ink-muted);
+            margin-bottom: 14px;
+        }
+
+        .s3-objectives {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 22px;
+            margin-bottom: 28px;
+        }
+        .obj-step {
+            padding: 30px 28px;
+            height: 274px;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-start;
+            gap: 28px;
+            position: relative;
+        }
+        .obj-top {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .obj-badge {
+            padding: 6px 14px;
+            border-radius: 8px;
+            background: var(--walmart-blue-tint);
+            color: var(--walmart-blue);
+            font-family: var(--font-mono);
+            font-size: 15px;
+            font-weight: 600;
+        }
+        .obj-arrow {
+            font-size: 24px;
+            color: var(--border-strong);
+            font-weight: 700;
+        }
+        .obj-title {
+            font-size: 24px;
+            font-weight: 800;
+            color: var(--navy);
+            margin-top: 0;
+            margin-bottom: 10px;
+        }
+        .obj-desc {
+            font-size: 18px;
+            line-height: 1.45;
+            color: var(--ink-secondary);
+        }
+
+        .transparency-bar {
+            padding: 22px 30px;
+            border-radius: 14px;
+            background: var(--walmart-blue-tint);
+            border: 1px solid #BFDBFE;
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+        .transparency-pill {
+            flex: 0 0 auto;
+            padding: 7px 16px;
+            border-radius: 999px;
+            background: var(--walmart-blue);
+            color: #FFFFFF;
+            font-size: 14px;
+            font-weight: 700;
+            letter-spacing: 0.03em;
+        }
+        .transparency-text {
+            font-size: 18px;
+            font-weight: 600;
+            color: var(--navy);
+        }
+
+        /* --- SLIDE 4: DIAGRAMA CRISP-DM 6 FASES + BENTO 2x2 --- */
+        .crisp-panel {
+            padding: 28px 30px;
+            margin-bottom: 26px;
+        }
+        .crisp-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 22px;
+        }
+        .crisp-title {
+            font-size: 18px;
+            font-weight: 800;
+            color: var(--navy);
+            letter-spacing: -0.01em;
+        }
+        .crisp-pill {
+            font-family: var(--font-mono);
+            font-size: 13px;
+            font-weight: 600;
+            padding: 5px 14px;
+            border-radius: 999px;
+            background: var(--emerald-tint);
+            color: var(--emerald);
+            border: 1px solid #99F6E4;
+        }
+        .crisp-flow {
+            display: grid;
+            grid-template-columns: repeat(6, 1fr);
+            gap: 16px;
+        }
+        .crisp-node {
+            background: var(--canvas);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            padding: 20px 18px;
+            position: relative;
+        }
+        .crisp-node.active-phase {
+            background: var(--navy);
+            border-color: var(--navy);
+            color: #FFFFFF;
+        }
+        .crisp-idx {
+            font-family: var(--font-mono);
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--walmart-blue);
+            margin-bottom: 8px;
+        }
+        .crisp-node.active-phase .crisp-idx {
+            color: var(--spark-yellow);
+        }
+        .crisp-name {
+            font-size: 19px;
+            font-weight: 800;
+            margin-bottom: 6px;
+            color: var(--navy);
+        }
+        .crisp-node.active-phase .crisp-name {
+            color: #FFFFFF;
+        }
+        .crisp-sub {
+            font-size: 15px;
+            color: var(--ink-secondary);
+            line-height: 1.35;
+        }
+        .crisp-node.active-phase .crisp-sub {
+            color: #CBD5E1;
+        }
+
+        .s4-bento {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 24px;
+        }
+        .tech-card {
+            padding: 30px 34px;
+            height: 214px;
+            display: flex;
+            align-items: center;
+            gap: 30px;
+            border-left: 7px solid var(--walmart-blue);
+        }
+        .tech-card.accent-gold { border-left-color: var(--spark-yellow); }
+        .tech-card.accent-emerald { border-left-color: var(--emerald); }
+        .tech-card.accent-navy { border-left-color: var(--navy); }
+
+        .tech-val {
+            flex: 0 0 210px;
+            font-size: 56px;
+            font-weight: 800;
+            letter-spacing: -0.03em;
+            color: var(--walmart-blue);
+            line-height: 1;
+        }
+        .tech-card.accent-gold .tech-val { color: var(--navy); }
+        .tech-card.accent-emerald .tech-val { color: var(--emerald); }
+        .tech-card.accent-navy .tech-val { color: var(--navy); }
+
+        .tech-copy h3 {
+            font-size: 24px;
+            font-weight: 800;
+            color: var(--navy);
+            margin-bottom: 8px;
+        }
+        .tech-copy p {
+            font-size: 18px;
+            color: var(--ink-secondary);
+            line-height: 1.45;
+        }
+
+        /* --- SLIDE 5: FIG01 DOMINANTE ARRIBA + 3 HALLAZGOS ABAJO --- */
+        .s5-fig {
+            height: 552px;
+            margin-bottom: 22px;
+        }
+        .s5-takeaways {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 24px;
+            height: 206px;
+        }
+        .takeaway-card {
+            padding: 24px 28px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            border-top: 5px solid var(--walmart-blue);
+        }
+        .takeaway-card.t-emerald { border-top-color: var(--emerald); }
+        .takeaway-card.t-spark { border-top-color: var(--spark-yellow); }
+
+        .takeaway-metric {
+            display: flex;
+            align-items: baseline;
+            gap: 12px;
+            margin-bottom: 8px;
+        }
+        .takeaway-metric strong {
+            font-size: 38px;
+            font-weight: 800;
+            color: var(--navy);
+            letter-spacing: -0.02em;
+        }
+        .takeaway-metric span {
+            font-size: 16px;
+            font-weight: 700;
+            color: var(--walmart-blue);
+        }
+        .takeaway-card.t-emerald .takeaway-metric span { color: var(--emerald); }
+        .takeaway-card.t-spark .takeaway-metric span { color: var(--amber); }
+
+        .takeaway-text {
+            font-size: 17px;
+            line-height: 1.42;
+            color: var(--ink-secondary);
+        }
+
+        /* --- SLIDE 6: ASIMÉTRICO IZQ FIG03 + DER INSIGHTS & RESUMEN FIG02 --- */
+        .s6-split {
+            display: grid;
+            grid-template-columns: 1110px 1fr;
+            gap: 28px;
+            height: 774px;
+        }
+        .s6-right {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            height: 774px;
+        }
+        .insight-block {
+            padding: 24px 28px;
+            border-left: 6px solid var(--walmart-blue);
+        }
+        .insight-block.b-spark { border-left-color: var(--spark-yellow); }
+
+        .insight-kicker {
+            font-family: var(--font-mono);
+            font-size: 13px;
+            font-weight: 600;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: var(--ink-muted);
+            margin-bottom: 6px;
+        }
+        .insight-row {
+            display: flex;
+            align-items: baseline;
+            gap: 14px;
+            margin-bottom: 6px;
+        }
+        .insight-row strong {
+            font-size: 46px;
+            font-weight: 800;
+            color: var(--navy);
+            letter-spacing: -0.03em;
+            line-height: 1.05;
+        }
+        .insight-row span {
+            font-size: 20px;
+            font-weight: 700;
+            color: var(--walmart-blue);
+        }
+        .insight-p {
+            font-size: 17px;
+            color: var(--ink-secondary);
+            line-height: 1.42;
+        }
+
+        .snap-summary-card {
+            flex: 1 1 auto;
+            padding: 26px 28px;
+            background: var(--navy);
+            color: #FFFFFF;
+            border-radius: 16px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            border-top: 5px solid var(--spark-yellow);
+        }
+        .snap-summary-card .kicker {
+            font-family: var(--font-mono);
+            font-size: 13px;
+            font-weight: 600;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            color: var(--spark-yellow);
+        }
+        .snap-stat-line {
+            display: flex;
+            align-items: baseline;
+            gap: 14px;
+            margin: 8px 0 6px 0;
+        }
+        .snap-stat-line strong {
+            font-size: 48px;
+            font-weight: 800;
+            color: var(--spark-yellow);
+            letter-spacing: -0.03em;
+        }
+        .snap-stat-line span {
+            font-size: 19px;
+            font-weight: 700;
+            color: #FFFFFF;
+        }
+        .snap-note {
+            font-size: 16px;
+            color: #CBD5E1;
+            line-height: 1.42;
+            margin-bottom: 14px;
+        }
+        .store-mini-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 10px;
+            padding-top: 14px;
+            border-top: 1px solid rgba(255, 255, 255, 0.14);
+        }
+        .store-mini {
+            background: rgba(255, 255, 255, 0.07);
+            border-radius: 10px;
+            padding: 10px 12px;
+            text-align: center;
+        }
+        .store-mini .st-name {
+            font-family: var(--font-mono);
+            font-size: 13px;
+            color: #93C5FD;
+            margin-bottom: 3px;
+        }
+        .store-mini .st-val {
+            font-size: 20px;
+            font-weight: 800;
+            color: #FFFFFF;
+        }
+        .store-mini.best { border: 1px solid rgba(45, 212, 191, 0.55); }
+        .store-mini.warn { border: 1px solid rgba(255, 194, 32, 0.55); }
+
+        /* --- SLIDE 7: 3 KPIs GIGANTES ARRIBA + FIG05 DOMINANTE ABAJO --- */
+        .s7-kpis {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 24px;
+            height: 202px;
+            margin-bottom: 22px;
+        }
+        .giant-kpi {
+            padding: 26px 32px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            position: relative;
+            overflow: hidden;
+        }
+        .giant-kpi::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            bottom: 0;
+            width: 8px;
+        }
+        .giant-kpi.k-danger::before { background: var(--danger); }
+        .giant-kpi.k-spark::before { background: var(--spark-yellow); }
+        .giant-kpi.k-blue::before { background: var(--walmart-blue); }
+
+        .giant-kpi-lbl {
+            font-family: var(--font-mono);
+            font-size: 13px;
+            font-weight: 600;
+            letter-spacing: 0.09em;
+            text-transform: uppercase;
+            color: var(--ink-muted);
+            margin-bottom: 8px;
+        }
+        .giant-kpi-val {
+            font-size: 60px;
+            font-weight: 800;
+            letter-spacing: -0.03em;
+            line-height: 1.02;
+            margin-bottom: 8px;
+        }
+        .k-danger .giant-kpi-val { color: var(--danger); }
+        .k-spark .giant-kpi-val { color: var(--navy); }
+        .k-blue .giant-kpi-val { color: var(--walmart-blue); }
+
+        .giant-kpi-sub {
+            font-size: 17px;
+            color: var(--ink-secondary);
+            font-weight: 500;
+        }
+        .s7-fig {
+            height: 554px;
+        }
+
+        /* --- SLIDE 8: DUAL STACK FIG06+FIG07 IZQ + PARETO SPOTLIGHT DER --- */
+        .s8-split {
+            display: grid;
+            grid-template-columns: 1110px 1fr;
+            gap: 26px;
+            height: 780px;
+        }
+        .s8-charts {
+            display: flex;
+            flex-direction: column;
+            gap: 18px;
+            height: 780px;
+        }
+        .s8-charts .figure-card {
+            height: 381px;
+            padding: 12px 16px;
+        }
+        .s8-right {
+            display: flex;
+            flex-direction: column;
+            gap: 18px;
+            height: 780px;
+        }
+        .pareto-hero {
+            height: 410px;
+            border-radius: 18px;
+            background: linear-gradient(155deg, var(--navy) 0%, #0D2B4B 100%);
+            color: #FFFFFF;
+            padding: 30px 32px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            border-top: 6px solid var(--spark-yellow);
+            box-shadow: 0 12px 30px rgba(8, 28, 48, 0.18);
+        }
+        .pareto-badge {
+            display: inline-block;
+            align-self: flex-start;
+            padding: 6px 14px;
+            border-radius: 999px;
+            background: rgba(255, 194, 32, 0.18);
+            border: 1px solid rgba(255, 194, 32, 0.55);
+            color: var(--spark-yellow);
+            font-family: var(--font-mono);
+            font-size: 13px;
+            font-weight: 600;
+            letter-spacing: 0.08em;
+        }
+        .pareto-ratio {
+            display: flex;
+            align-items: baseline;
+            gap: 18px;
+            margin: 12px 0 8px 0;
+        }
+        .pareto-ratio .small-pct {
+            font-size: 46px;
+            font-weight: 800;
+            color: #93C5FD;
+        }
+        .pareto-ratio .arrow-p {
+            font-size: 36px;
+            color: var(--spark-yellow);
+            font-weight: 700;
+        }
+        .pareto-ratio .big-pct {
+            font-size: 74px;
+            font-weight: 800;
+            color: var(--spark-yellow);
+            letter-spacing: -0.03em;
+            line-height: 1;
+        }
+        .pareto-caption {
+            font-size: 20px;
+            font-weight: 700;
+            line-height: 1.38;
+            color: #F8FAFC;
+        }
+        .pareto-footer-pill {
+            display: flex;
+            justify-content: space-between;
+            padding-top: 16px;
+            border-top: 1px solid rgba(255, 255, 255, 0.15);
+            font-size: 16px;
+            color: #CBD5E1;
+        }
+        .pareto-footer-pill strong { color: #FFFFFF; }
+
+        .cluster-mini-card {
+            flex: 1 1 auto;
+            padding: 22px 26px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+        .cluster-mini-title {
+            font-family: var(--font-mono);
+            font-size: 13px;
+            font-weight: 600;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: var(--ink-muted);
+            margin-bottom: 10px;
+        }
+        .cluster-list {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .cluster-item {
+            display: grid;
+            grid-template-columns: 52px 1fr auto;
+            align-items: center;
+            gap: 12px;
+            padding: 11px 14px;
+            border-radius: 10px;
+            background: var(--canvas);
+            border: 1px solid var(--border);
+        }
+        .cluster-item.c-crit {
+            background: var(--danger-tint);
+            border-color: #FECACA;
+        }
+        .c-tag {
+            font-family: var(--font-mono);
+            font-size: 15px;
+            font-weight: 700;
+            text-align: center;
+            padding: 4px 0;
+            border-radius: 6px;
+            background: var(--navy);
+            color: #FFFFFF;
+        }
+        .cluster-item.c-crit .c-tag { background: var(--danger); }
+        .c-name {
+            font-size: 16px;
+            font-weight: 700;
+            color: var(--ink-primary);
+        }
+        .c-stat {
+            font-size: 15px;
+            font-weight: 700;
+            color: var(--ink-secondary);
+            text-align: right;
+        }
+        .cluster-item.c-crit .c-stat { color: var(--danger); }
+
+        /* --- SLIDE 9: FIG08 DOMINANTE ARRIBA + 3 TARJETAS TÁCTICAS ABAJO --- */
+        .s9-fig {
+            height: 484px;
+            margin-bottom: 22px;
+        }
+        .s9-tactics {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 24px;
+            height: 274px;
+        }
+        .tactic-card {
+            padding: 28px 28px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            gap: 18px;
+            border-left: 7px solid var(--walmart-blue);
+        }
+        .tactic-card.tac-red { border-left-color: var(--danger); }
+        .tactic-card.tac-gold { border-left-color: var(--spark-yellow); }
+
+        .tactic-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 10px;
+        }
+        .tactic-pill {
+            font-family: var(--font-mono);
+            font-size: 13px;
+            font-weight: 600;
+            padding: 5px 12px;
+            border-radius: 6px;
+            background: var(--walmart-blue-tint);
+            color: var(--walmart-blue);
+        }
+        .tac-red .tactic-pill { background: var(--danger-tint); color: var(--danger); }
+        .tac-gold .tactic-pill { background: var(--spark-yellow-tint); color: var(--amber); }
+
+        .tactic-kpi {
+            font-size: 28px;
+            font-weight: 800;
+            color: var(--navy);
+        }
+        .tactic-title {
+            font-size: 22px;
+            font-weight: 800;
+            color: var(--navy);
+            margin-bottom: 8px;
+        }
+        .tactic-body {
+            font-size: 17px;
+            line-height: 1.45;
+            color: var(--ink-secondary);
+        }
+
+        /* --- SLIDE 10: DUAL DASHBOARD SHOWCASE IZQ + LIVE DEMO & EJEMPLOS DER --- */
+        .s10-split {
+            display: grid;
+            grid-template-columns: 1186px 1fr;
+            gap: 28px;
+            height: 774px;
+        }
+        .s10-gallery {
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            height: 774px;
+        }
+        .browser-pair {
+            display: flex;
+            gap: 20px;
+            align-items: stretch;
+            height: 706px;
+        }
+        .browser-frame {
+            background: var(--surface);
+            border: 1px solid var(--border-strong);
+            border-radius: 16px;
+            overflow: hidden;
+            box-shadow: 0 12px 30px rgba(15, 23, 42, 0.08);
+            display: flex;
+            flex-direction: column;
+        }
+        .browser-frame.f-tab1 { width: 632px; }
+        .browser-frame.f-tab3 { width: 534px; }
+
+        .browser-chrome {
+            flex: 0 0 38px;
+            background: var(--navy);
+            color: #E2E8F0;
+            padding: 0 16px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-size: 13px;
+            font-weight: 600;
+        }
+        .browser-dots {
+            display: inline-flex;
+            gap: 6px;
+        }
+        .browser-dots i {
+            display: block;
+            width: 9px;
+            height: 9px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.35);
+        }
+        .browser-dots i:first-child { background: #F87171; }
+        .browser-dots i:nth-child(2) { background: var(--spark-yellow); }
+        .browser-dots i:nth-child(3) { background: #34D399; }
+
+        .browser-body {
+            flex: 1 1 auto;
+            background: #F5F5F7;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 10px;
+            overflow: hidden;
+        }
+        .browser-body img {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+            border-radius: 6px;
+        }
+
+        .tech-ribbon {
+            height: 52px;
+            padding: 0 22px;
+            border-radius: 12px;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-size: 15px;
+            color: var(--ink-secondary);
+            font-weight: 600;
+        }
+        .tech-ribbon strong { color: var(--navy); }
+
+        .s10-right {
+            display: flex;
+            flex-direction: column;
+            gap: 18px;
+            height: 774px;
+        }
+        .live-demo-badge {
+            padding: 20px 24px;
+            border-radius: 14px;
+            background: var(--navy);
+            color: #FFFFFF;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-left: 7px solid var(--spark-yellow);
+            box-shadow: 0 10px 24px rgba(8, 28, 48, 0.16);
+        }
+        .live-dot-wrap {
+            display: inline-flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 20px;
+            font-weight: 800;
+            color: #FFFFFF;
+        }
+        .live-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #22C55E;
+            box-shadow: 0 0 0 5px rgba(34, 197, 94, 0.25);
+        }
+        .live-time {
+            font-family: var(--font-mono);
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--spark-yellow);
+        }
+
+        .example-card {
+            flex: 1 1 0;
+            padding: 24px 26px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            border-top: 4px solid var(--walmart-blue);
+        }
+        .example-card.ex-red { border-top-color: var(--danger); }
+        .example-card.ex-emerald { border-top-color: var(--emerald); }
+
+        .ex-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 10px;
+        }
+        .ex-sku {
+            font-family: var(--font-mono);
+            font-size: 17px;
+            font-weight: 600;
+            color: var(--navy);
+        }
+        .ex-val {
+            font-size: 28px;
+            font-weight: 800;
+            color: var(--walmart-blue);
+        }
+        .ex-red .ex-val { color: var(--danger); }
+        .ex-emerald .ex-val { color: var(--emerald); }
+
+        .ex-action {
+            font-size: 18px;
+            font-weight: 700;
+            color: var(--ink-primary);
+            margin-bottom: 6px;
+        }
+        .ex-detail {
+            font-size: 16px;
+            color: var(--ink-secondary);
+            line-height: 1.4;
+        }
+
+        /* --- SLIDE 11: DOS COLUMNAS LIMPIAS (4 CONCLUSIONES | 3 ALCANCES FUTUROS) --- */
+        .s11-split {
+            display: grid;
+            grid-template-columns: 1016px 1fr;
+            gap: 34px;
+            height: 774px;
+        }
+        .s11-col-title {
+            font-family: var(--font-mono);
+            font-size: 15px;
+            font-weight: 600;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            color: var(--walmart-blue);
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .s11-col-title::before {
+            content: '';
+            width: 14px;
+            height: 4px;
+            background: var(--spark-yellow);
+            border-radius: 2px;
+        }
+
+        .conclusions-stack {
+            display: flex;
+            flex-direction: column;
+            gap: 18px;
+            height: 734px;
+        }
+        .conclusion-card {
+            flex: 1 1 0;
+            padding: 22px 28px;
+            display: flex;
+            align-items: center;
+            gap: 24px;
+        }
+        .oe-circle {
+            flex: 0 0 74px;
+            height: 74px;
+            border-radius: 16px;
+            background: var(--walmart-blue-tint);
+            border: 1px solid #BFDBFE;
+            color: var(--walmart-blue);
+            font-family: var(--font-mono);
+            font-size: 20px;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .conclusion-card h3 {
+            font-size: 21px;
+            font-weight: 800;
+            color: var(--navy);
+            margin-bottom: 6px;
+        }
+        .conclusion-card p {
+            font-size: 17px;
+            color: var(--ink-secondary);
+            line-height: 1.42;
+        }
+
+        .future-panel {
+            background: var(--surface-muted);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            padding: 24px 26px;
+            height: 734px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+        .future-item {
+            flex: 1 1 0;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            padding: 24px 26px;
+            border-left: 6px solid var(--navy);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+        .future-item.f-spark { border-left-color: var(--spark-yellow); }
+        .future-item.f-blue { border-left-color: var(--walmart-blue); }
+
+        .future-num {
+            font-family: var(--font-mono);
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--walmart-blue);
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            margin-bottom: 6px;
+        }
+        .future-item h3 {
+            font-size: 22px;
+            font-weight: 800;
+            color: var(--navy);
+            margin-bottom: 8px;
+        }
+        .future-item p {
+            font-size: 17px;
+            color: var(--ink-secondary);
+            line-height: 1.45;
+        }
+
+        /* --- SLIDE 12: CIERRE OSCURO (#081C30) --- */
+        .closing-kpis {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 28px;
+            margin: 12px 0 36px 0;
+        }
+        .closing-card {
+            background: rgba(255, 255, 255, 0.06);
+            border: 1px solid rgba(255, 255, 255, 0.14);
+            border-radius: 18px;
+            padding: 36px 34px;
+            border-top: 6px solid var(--spark-yellow);
+        }
+        .closing-card.c-blue { border-top-color: var(--walmart-blue); }
+        .closing-card.c-emerald { border-top-color: #2DD4BF; }
+
+        .closing-val {
+            font-size: 74px;
+            font-weight: 800;
+            letter-spacing: -0.03em;
+            color: var(--spark-yellow);
+            line-height: 1;
+            margin-bottom: 14px;
+        }
+        .closing-card.c-blue .closing-val { color: #60A5FA; }
+        .closing-card.c-emerald .closing-val { color: #2DD4BF; }
+
+        .closing-lbl {
+            font-size: 22px;
+            font-weight: 700;
+            color: #FFFFFF;
+            margin-bottom: 8px;
+        }
+        .closing-sub {
+            font-size: 17px;
+            color: #94A3B8;
+            line-height: 1.4;
+        }
+
+        .closing-cta {
+            margin-bottom: 10px;
+        }
+        .closing-title {
+            font-size: 62px;
+            font-weight: 800;
+            letter-spacing: -0.03em;
+            color: #FFFFFF;
+            line-height: 1.1;
+            margin-bottom: 14px;
+        }
+        .closing-title span { color: var(--spark-yellow); }
+        .closing-subline {
+            font-size: 22px;
+            color: #CBD5E1;
+            font-weight: 500;
+        }
+
+        /* ==========================================================================
+           6. PRESENTATION CHROME (OUTSIDE STAGE: PROGRESS, CONTROLS, NOTES, EDIT)
+           ========================================================================== */
+        .top-progress {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: rgba(255, 255, 255, 0.12);
+            z-index: 1002;
+            pointer-events: none;
+        }
+        .top-progress-fill {
+            height: 100%;
+            width: 8.33%;
+            background: linear-gradient(90deg, var(--walmart-blue), var(--spark-yellow));
+            transition: width 0.3s var(--ease-out-expo);
+        }
+
+        .deck-controls {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 14px;
+            border-radius: 999px;
+            background: rgba(8, 28, 48, 0.86);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.16);
+            box-shadow: 0 10px 28px rgba(0, 0, 0, 0.35);
+            color: #FFFFFF;
+            opacity: 0.25;
+            transition: opacity 0.25s ease;
+        }
+        .deck-controls:hover,
+        .deck-controls.pinned {
+            opacity: 1;
+        }
+
+        .ctrl-btn {
+            appearance: none;
+            border: none;
+            background: rgba(255, 255, 255, 0.08);
+            color: #FFFFFF;
+            font-family: var(--font-sans);
+            font-size: 13px;
+            font-weight: 600;
+            padding: 6px 12px;
+            border-radius: 999px;
+            cursor: pointer;
+            transition: background 0.18s ease;
+        }
+        .ctrl-btn:hover {
+            background: rgba(255, 255, 255, 0.22);
+        }
+        .ctrl-btn.active {
+            background: var(--spark-yellow);
+            color: var(--navy);
+        }
+        .ctrl-counter {
+            font-family: var(--font-mono);
+            font-size: 13px;
+            font-weight: 600;
+            padding: 0 10px;
+            color: #E2E8F0;
+            font-variant-numeric: tabular-nums;
+        }
+
+        /* Speaker Notes Drawer (tecla N) */
+        .notes-drawer {
+            position: fixed;
+            left: 50%;
+            bottom: 78px;
+            transform: translateX(-50%) translateY(16px);
+            width: min(960px, calc(100vw - 48px));
+            max-height: 220px;
+            overflow-y: auto;
+            background: rgba(8, 28, 48, 0.94);
+            backdrop-filter: blur(14px);
+            border: 1px solid rgba(255, 194, 32, 0.45);
+            border-radius: 16px;
+            padding: 18px 24px;
+            color: #F8FAFC;
+            z-index: 1001;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.25s ease, transform 0.25s var(--ease-out-expo);
+            box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45);
+        }
+        .notes-drawer.open {
+            opacity: 1;
+            transform: translateX(-50%) translateY(0);
+            pointer-events: auto;
+        }
+        .notes-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 8px;
+            font-size: 13px;
+            font-weight: 700;
+            color: var(--spark-yellow);
+            font-family: var(--font-mono);
+        }
+        .notes-body {
+            font-size: 15px;
+            line-height: 1.55;
+            color: #E2E8F0;
+        }
+
+        /* Inline Editing Hotzone + Toggle (JS hover con grace timeout de 400ms) */
+        .edit-hotzone {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 84px;
+            height: 84px;
+            z-index: 10000;
+            cursor: pointer;
+        }
+        .edit-toggle {
+            position: fixed;
+            top: 16px;
+            left: 16px;
+            padding: 8px 14px;
+            border-radius: 999px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            background: rgba(8, 28, 48, 0.92);
+            color: #FFFFFF;
+            font-family: var(--font-sans);
+            font-size: 13px;
+            font-weight: 700;
+            cursor: pointer;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.28s ease, background 0.2s ease;
+            z-index: 10001;
+        }
+        .edit-toggle.show,
+        .edit-toggle.active {
+            opacity: 1;
+            pointer-events: auto;
+        }
+        .edit-toggle.active {
+            background: var(--spark-yellow);
+            color: var(--navy);
+            border-color: var(--spark-yellow);
+        }
+
+        .edit-banner {
+            position: fixed;
+            top: 16px;
+            left: 132px;
+            padding: 8px 16px;
+            border-radius: 999px;
+            background: rgba(8, 28, 48, 0.92);
+            color: #F8FAFC;
+            font-size: 13px;
+            font-weight: 600;
+            z-index: 10001;
+            display: none;
+            align-items: center;
+            gap: 12px;
+            border: 1px solid rgba(255, 194, 32, 0.45);
+        }
+        .edit-banner.active {
+            display: inline-flex;
+        }
+        .edit-banner button {
+            appearance: none;
+            border: none;
+            background: rgba(255, 255, 255, 0.14);
+            color: #FFFFFF;
+            padding: 4px 10px;
+            border-radius: 999px;
+            font-size: 12px;
+            font-weight: 700;
+            cursor: pointer;
+        }
+        .edit-banner button:hover {
+            background: var(--spark-yellow);
+            color: var(--navy);
+        }
+
+        body.editing-mode [contenteditable="true"] {
+            outline: 2px dashed rgba(0, 113, 206, 0.55);
+            outline-offset: 4px;
+            border-radius: 6px;
+            cursor: text;
+        }
+        body.editing-mode .slide-dark [contenteditable="true"] {
+            outline-color: rgba(255, 194, 32, 0.65);
+        }
+    </style>
+</head>
+<body>
+    <!-- Discreet Top Progress Bar -->
+    <div class="top-progress" aria-hidden="true">
+        <div class="top-progress-fill" id="progressFill"></div>
+    </div>
+
+    <!-- Inline Editing Affordance (Hover Top-Left or Press E) -->
+    <div class="edit-hotzone" aria-hidden="true"></div>
+    <button class="edit-toggle" id="editToggle" type="button" title="Modo edición (E)">Editar (E)</button>
+    <div class="edit-banner" id="editBanner" role="status">
+        <span>Modo edición activo · Clic en texto para modificar</span>
+        <button type="button" id="saveHtmlBtn">Guardar HTML (Ctrl+S)</button>
+        <button type="button" id="resetEditsBtn">Restaurar</button>
+    </div>
+
+    <!-- Fixed 16:9 Stage Viewport -->
+    <div class="deck-viewport">
+        <main class="deck-stage" id="deckStage" aria-label="Presentación Walmart California FOODS">
+
+            <!-- ==================================================================
+                 SLIDE 1 — PORTADA OSCURA (#081C30) · BLOQUE 1 (ADOLFO CHULLUNCUY)
+                 ================================================================== -->
+            <section class="slide slide-dark active visible"
+                     data-slide="1"
+                     data-speaker="Bloque 1 · Chulluncuy Cambillo, Adolfo Milton"
+                     data-time="0:00 – 0:25"
+                     data-notes="Buenos días jurado y compañeros. Somos estudiantes de Ingeniería de Sistemas de la UNDC. Presentamos nuestro prototipo de IA Aplicada al Marketing Digital: un sistema de pronóstico de demanda con Random Forest diseñado para orientar promociones reales en alimentos de Walmart California.">
+                <div class="dark-grid-overlay"></div>
+                <div class="dark-accent-edge"></div>
+                <div class="dark-shell">
+                    <div class="dark-topbar reveal d1">
+                        <div class="brand-lockup">
+                            <!-- Walmart-inspired minimal geometric Spark emblem -->
+                            <svg width="42" height="42" viewBox="0 0 48 48" fill="none" aria-hidden="true">
+                                <g stroke="#FFC220" stroke-width="4.6" stroke-linecap="round">
+                                    <line x1="24" y1="5" x2="24" y2="14"/>
+                                    <line x1="24" y1="34" x2="24" y2="43"/>
+                                    <line x1="7.5" y1="14.5" x2="15.3" y2="19"/>
+                                    <line x1="32.7" y1="29" x2="40.5" y2="33.5"/>
+                                    <line x1="40.5" y1="14.5" x2="32.7" y2="19"/>
+                                    <line x1="15.3" y1="29" x2="7.5" y2="33.5"/>
+                                </g>
+                            </svg>
+                            <span class="brand-tag">UNDC 2026 · Escuela Profesional de Ingeniería de Sistemas</span>
+                        </div>
+                        <span class="course-pill">IA Aplicada al Marketing Digital</span>
+                    </div>
+
+                    <div class="hero-center">
+                        <div class="spark-rule reveal d1"></div>
+                        <h1 class="hero-title reveal d2">
+                            Pronóstico de Demanda con Random Forest<br>
+                            <span class="accent">para Orientar Promociones en Walmart</span>
+                        </h1>
+                        <p class="hero-subtitle reveal d3">
+                            Prototipo predictivo y motor prescriptivo sobre datos reales Kaggle M5 · Categoría FOODS en California (CA_1–CA_4)
+                        </p>
+                        <div class="hero-telemetry reveal d4">
+                            <div class="telemetry-pill"><strong class="num">1,437</strong><span>productos</span></div>
+                            <div class="telemetry-pill"><strong class="num">5,748</strong><span>series reales</span></div>
+                            <div class="telemetry-pill"><strong class="num">28 días</strong><span>horizonte operativo</span></div>
+                            <div class="telemetry-pill"><strong class="num">$59,362</strong><span>en riesgo detectados</span></div>
+                        </div>
+                    </div>
+
+                    <div class="team-grid reveal d5">
+                        <div class="team-card">
+                            <div class="block-label">Bloque 1 · Slides 1–3</div>
+                            <div class="member-name">Chulluncuy Cambillo, Adolfo Milton</div>
+                        </div>
+                        <div class="team-card">
+                            <div class="block-label">Bloque 2 · Slides 4–6</div>
+                            <div class="member-name">Felix Delgado, Alexander</div>
+                        </div>
+                        <div class="team-card">
+                            <div class="block-label">Bloque 3 · Slides 7–9</div>
+                            <div class="member-name">Siccha Dávila, Angel</div>
+                        </div>
+                        <div class="team-card">
+                            <div class="block-label">Bloque 4 · Slides 10–12</div>
+                            <div class="member-name">Zavala Gamero, Piero Rodrigo</div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ==================================================================
+                 SLIDE 2 — LA PROBLEMÁTICA ("LA BRECHA") · BLOQUE 1
+                 ================================================================== -->
+            <section class="slide slide-light"
+                     data-slide="2"
+                     data-speaker="Bloque 1 · Chulluncuy Cambillo, Adolfo Milton"
+                     data-time="0:25 – 0:50"
+                     data-notes="En retail alimentario enfrentamos tres problemas críticos: el error de pronóstico cuesta dinero (2% mermas, 8% quiebres); las promociones sin criterio generan caídas de -20% a -30% post-oferta por acaparamiento; y la precisión sola no decide qué acción comercial tomar. Ahí nace nuestra brecha.">
+                <div class="brand-topbar"></div>
+                <div class="slide-shell">
+                    <header class="slide-header reveal d1">
+                        <div class="header-meta">
+                            <span class="eyebrow">01 · Problemática y Justificación</span>
+                            <span class="speaker-chip"><span class="dot"></span>Adolfo Chulluncuy · Bloque 1</span>
+                        </div>
+                        <h2 class="slide-title">Predecir sin prescribir no evita mermas ni protege el margen</h2>
+                    </header>
+
+                    <div class="slide-body">
+                        <div class="s2-grid">
+                            <article class="card pillar-card p-blue reveal d2">
+                                <div>
+                                    <div class="pillar-num">PILAR 01</div>
+                                    <div class="pillar-stat num">2% / 8%</div>
+                                    <h3 class="pillar-heading">El error cuesta dinero</h3>
+                                    <p class="pillar-desc">Sobreestimar demanda dispara mermas en alimentos; subestimarla causa quiebres en góndola.</p>
+                                </div>
+                                <span class="pillar-tag">Mermas vs. Quiebres de stock</span>
+                            </article>
+
+                            <article class="card pillar-card p-red reveal d3">
+                                <div>
+                                    <div class="pillar-num">PILAR 02</div>
+                                    <div class="pillar-stat num">-20% a -30%</div>
+                                    <h3 class="pillar-heading">Promociones distorsionan</h3>
+                                    <p class="pillar-desc">Descuentos mal focalizados erosionan margen y desploman ventas post-oferta por acaparamiento.</p>
+                                </div>
+                                <span class="pillar-tag">Efecto stockpiling post-oferta</span>
+                            </article>
+
+                            <article class="card pillar-card p-gold reveal d4">
+                                <div>
+                                    <div class="pillar-num">PILAR 03</div>
+                                    <div class="pillar-stat num">92.5%</div>
+                                    <h3 class="pillar-heading">Precisión sola no decide</h3>
+                                    <p class="pillar-desc">En Kaggle M5 casi ningún equipo batió a SES, y ninguno conectó el pronóstico con marketing.</p>
+                                </div>
+                                <span class="pillar-tag">Brecha analítica → comercial</span>
+                            </article>
+                        </div>
+
+                        <div class="gap-banner reveal d5">
+                            <span class="gap-badge">La Brecha</span>
+                            <p class="gap-text">
+                                Traducir el pronóstico diario a 28 días en <span>decisiones promocionales diferenciadas</span> que protejan margen bruto y aceleren rotación real.
+                            </p>
+                        </div>
+                    </div>
+
+                    <footer class="slide-footer">
+                        <span>Walmart California · Categoría FOODS (Kaggle M5) · UNDC 2026</span>
+                        <span class="slide-num">02 / 12</span>
+                    </footer>
+                </div>
+            </section>
+
+            <!-- ==================================================================
+                 SLIDE 3 — ALCANCE, DATOS M5 Y OBJETIVOS · BLOQUE 1
+                 ================================================================== -->
+            <section class="slide slide-light"
+                     data-slide="3"
+                     data-speaker="Bloque 1 · Chulluncuy Cambillo, Adolfo Milton"
+                     data-time="0:50 – 1:15"
+                     data-notes="Acotamos el proyecto a datos 100% reales de Kaggle M5 en alimentos de California: 1,437 productos en 4 tiendas, 5,748 series durante 3 años, con 49.89% de días en cero. Estructuramos 4 objetivos específicos desde ETL sin fuga hasta el dashboard, dejando claro que no simulamos stock ni costos.">
+                <div class="brand-topbar"></div>
+                <div class="slide-shell">
+                    <header class="slide-header reveal d1">
+                        <div class="header-meta">
+                            <span class="eyebrow">02 · Alcance, Datos Reales M5 y Objetivos</span>
+                            <span class="speaker-chip"><span class="dot"></span>Adolfo Chulluncuy · Bloque 1</span>
+                        </div>
+                        <h2 class="slide-title">5,748 series reales de FOODS en California con cuatro objetivos medibles</h2>
+                    </header>
+
+                    <div class="slide-body">
+                        <div class="s3-metrics reveal d2">
+                            <div class="card hero-stat-card">
+                                <div class="hero-stat-val num">1,437</div>
+                                <div class="hero-stat-lbl">Productos únicos</div>
+                                <div class="hero-stat-sub">FOODS_1 · FOODS_2 · FOODS_3</div>
+                            </div>
+                            <div class="card hero-stat-card">
+                                <div class="hero-stat-val num">4</div>
+                                <div class="hero-stat-lbl">Tiendas California</div>
+                                <div class="hero-stat-sub">CA_1 · CA_2 · CA_3 · CA_4</div>
+                            </div>
+                            <div class="card hero-stat-card">
+                                <div class="hero-stat-val num">5,748</div>
+                                <div class="hero-stat-lbl">Series SKU-Tienda</div>
+                                <div class="hero-stat-sub">Horizonte operativo 28 días</div>
+                            </div>
+                            <div class="card hero-stat-card">
+                                <div class="hero-stat-val num">3 años</div>
+                                <div class="hero-stat-lbl">Historia completa</div>
+                                <div class="hero-stat-sub">May 2013 – May 2016 (1,096 d)</div>
+                            </div>
+                            <div class="card hero-stat-card spark-accent">
+                                <div class="hero-stat-val num">49.89%</div>
+                                <div class="hero-stat-lbl">Intermitencia real</div>
+                                <div class="hero-stat-sub">2.85M días activos con venta 0</div>
+                            </div>
+                        </div>
+
+                        <div class="s3-section-label reveal d3">Cuatro Objetivos Específicos del Prototipo</div>
+                        <div class="s3-objectives reveal d3">
+                            <div class="card obj-step">
+                                <div class="obj-top"><span class="obj-badge">OE 1</span><span class="obj-arrow">→</span></div>
+                                <div>
+                                    <h3 class="obj-title">ETL sin fuga</h3>
+                                    <p class="obj-desc">Depurar M5 e ingeniar rezagos y precios estrictamente &ge; t-28.</p>
+                                </div>
+                            </div>
+                            <div class="card obj-step">
+                                <div class="obj-top"><span class="obj-badge">OE 2</span><span class="obj-arrow">→</span></div>
+                                <div>
+                                    <h3 class="obj-title">Evaluación RF</h3>
+                                    <p class="obj-desc">Validar Random Forest vs. MA28, SES y Seasonal Naïve.</p>
+                                </div>
+                            </div>
+                            <div class="card obj-step">
+                                <div class="obj-top"><span class="obj-badge">OE 3</span><span class="obj-arrow">→</span></div>
+                                <div>
+                                    <h3 class="obj-title">Diagnóstico 28d</h3>
+                                    <p class="obj-desc">Cuantificar Ingreso en Riesgo, elasticidad precio y SNAP.</p>
+                                </div>
+                            </div>
+                            <div class="card obj-step">
+                                <div class="obj-top"><span class="obj-badge">OE 4</span><span class="obj-arrow">✓</span></div>
+                                <div>
+                                    <h3 class="obj-title">Plan + Dashboard</h3>
+                                    <p class="obj-desc">Segmentar con K-Means y desplegar motor prescriptivo.</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="transparency-bar reveal d4">
+                            <span class="transparency-pill">100% Datos Reales M5</span>
+                            <span class="transparency-text">Solo ventas diarias, precios semanales, calendario y SNAP · Sin stock físico, costos (COGS) ni mermas simuladas.</span>
+                        </div>
+                    </div>
+
+                    <footer class="slide-footer">
+                        <span>Fuente: Kaggle M5 Forecasting · Auditoría ETL (etl_audit.json) · UNDC 2026</span>
+                        <span class="slide-num">03 / 12</span>
+                    </footer>
+                </div>
+            </section>
+
+            <!-- ==================================================================
+                 SLIDE 4 — METODOLOGÍA CRISP-DM Y PIPELINE SIN FUGA · BLOQUE 2
+                 ================================================================== -->
+            <section class="slide slide-light"
+                     data-slide="4"
+                     data-speaker="Bloque 2 · Felix Delgado, Alexander"
+                     data-time="1:15 – 1:40"
+                     data-notes="Ejecutamos el proyecto bajo CRISP-DM en 6 fases con control estricto de memoria y cero fuga temporal. Depuramos 682,592 filas pre-lanzamiento conservando 5.71 millones activas, redujimos RAM en 81.28%, creamos 16 variables con rezagos >= t-28 auditadas 200/200 y validamos en 4 ventanas rodantes cronológicas.">
+                <div class="brand-topbar"></div>
+                <div class="slide-shell">
+                    <header class="slide-header reveal d1">
+                        <div class="header-meta">
+                            <span class="eyebrow">03 · Metodología CRISP-DM e Ingeniería Anti-Fuga</span>
+                            <span class="speaker-chip"><span class="dot"></span>Alexander Felix · Bloque 2</span>
+                        </div>
+                        <h2 class="slide-title">Pipeline CRISP-DM reproducible, eficiente en RAM y libre de data leakage</h2>
+                    </header>
+
+                    <div class="slide-body">
+                        <div class="card crisp-panel reveal d2">
+                            <div class="crisp-header">
+                                <span class="crisp-title">Ciclo Metodológico CRISP-DM (6 Fases Auditadas)</span>
+                                <span class="crisp-pill">Auditoría anti-fuga: PASS 200/200</span>
+                            </div>
+                            <div class="crisp-flow">
+                                <div class="crisp-node">
+                                    <div class="crisp-idx">FASE 01</div>
+                                    <div class="crisp-name">Negocio</div>
+                                    <div class="crisp-sub">Brecha comercial y KPI de Ingreso en Riesgo</div>
+                                </div>
+                                <div class="crisp-node">
+                                    <div class="crisp-idx">FASE 02</div>
+                                    <div class="crisp-name">Datos M5</div>
+                                    <div class="crisp-sub">Integración ventas, precios y calendario CA</div>
+                                </div>
+                                <div class="crisp-node active-phase">
+                                    <div class="crisp-idx">FASE 03</div>
+                                    <div class="crisp-name">Preparación</div>
+                                    <div class="crisp-sub">Downcasting + 16 features &ge; t-28</div>
+                                </div>
+                                <div class="crisp-node active-phase">
+                                    <div class="crisp-idx">FASE 04</div>
+                                    <div class="crisp-name">Modelado RF</div>
+                                    <div class="crisp-sub">100 árboles · depth 16 · max_samples 0.30</div>
+                                </div>
+                                <div class="crisp-node">
+                                    <div class="crisp-idx">FASE 05</div>
+                                    <div class="crisp-name">Evaluación</div>
+                                    <div class="crisp-sub">4 ventanas rodantes MAE / RMSE / RMSSE</div>
+                                </div>
+                                <div class="crisp-node">
+                                    <div class="crisp-idx">FASE 06</div>
+                                    <div class="crisp-name">Despliegue</div>
+                                    <div class="crisp-sub">K-Means + Plan Prescriptivo + Streamlit</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="s4-bento">
+                            <article class="card tech-card reveal d3">
+                                <div class="tech-val num">5.71M</div>
+                                <div class="tech-copy">
+                                    <h3>Filas activas validadas</h3>
+                                    <p>Se depuraron 682,592 filas pre-lanzamiento; 0 duplicados, 0 precios inválidos y 0 ventas negativas.</p>
+                                </div>
+                            </article>
+
+                            <article class="card tech-card accent-emerald reveal d3">
+                                <div class="tech-val num">-81.28%</div>
+                                <div class="tech-copy">
+                                    <h3>Reducción de memoria RAM</h3>
+                                    <p>De 1,031.4 MB a 193.1 MB mediante downcasting (float32/int8/category) y almacenamiento Parquet.</p>
+                                </div>
+                            </article>
+
+                            <article class="card tech-card accent-gold reveal d4">
+                                <div class="tech-val num">16</div>
+                                <div class="tech-copy">
+                                    <h3>Features estrictas &ge; t-28</h3>
+                                    <p>Rezagos (28, 35, 56), medias móviles desde t-28 y precio relativo expansivo sin información futura.</p>
+                                </div>
+                            </article>
+
+                            <article class="card tech-card accent-navy reveal d4">
+                                <div class="tech-val num">4 × 28d</div>
+                                <div class="tech-copy">
+                                    <h3>Origen rodante cronológico</h3>
+                                    <p>Validación sobre d_1830..d_1941 (Feb–May 2016) reentrenando baselines antes de cada corte.</p>
+                                </div>
+                            </article>
+                        </div>
+                    </div>
+
+                    <footer class="slide-footer">
+                        <span>Pipeline: src/01_etl_features.py &amp; src/02_train_validate.py · Pico RAM: 2,299 MB</span>
+                        <span class="slide-num">04 / 12</span>
+                    </footer>
+                </div>
+            </section>
+
+            <!-- ==================================================================
+                 SLIDE 5 — EVALUACIÓN PREDICTIVA (FIG01) · BLOQUE 2
+                 ================================================================== -->
+            <section class="slide slide-light"
+                     data-slide="5"
+                     data-speaker="Bloque 2 · Felix Delgado, Alexander"
+                     data-time="1:40 – 2:05"
+                     data-notes="En validación rodante de 4 ventanas sobre las 5,748 series, Random Forest logró el menor RMSE global con 2.7190: +20.75% sobre Seasonal Naïve, +6.18% sobre SES y +1.43% sobre MA28. Con rigor metodológico, en RMSSE simple (0.7953) MA28 y SES quedaron ~2% abajo en series planas, pero solo RF modela precio, día y SNAP.">
+                <div class="brand-topbar"></div>
+                <div class="slide-shell">
+                    <header class="slide-header reveal d1">
+                        <div class="header-meta">
+                            <span class="eyebrow">04 · Evaluación Predictiva (4 Ventanas Rodantes)</span>
+                            <span class="speaker-chip"><span class="dot"></span>Alexander Felix · Bloque 2</span>
+                        </div>
+                        <h2 class="slide-title">Random Forest obtiene el menor RMSE global (2.7190) frente a los baselines</h2>
+                    </header>
+
+                    <div class="slide-body">
+                        <div class="figure-card s5-fig reveal d2">
+                            <img src="assets/fig01_validation_metrics_comparison.png" alt="Comparativa de métricas MAE, RMSE y RMSSE entre Random Forest y líneas base">
+                        </div>
+
+                        <div class="s5-takeaways">
+                            <article class="card takeaway-card reveal d3">
+                                <div class="takeaway-metric">
+                                    <strong class="num">2.7190</strong>
+                                    <span>Mejor RMSE global</span>
+                                </div>
+                                <p class="takeaway-text">Minimiza errores grandes en los productos de mayor volumen y rotación semanal.</p>
+                            </article>
+
+                            <article class="card takeaway-card t-emerald reveal d4">
+                                <div class="takeaway-metric">
+                                    <strong class="num">+20.75%</strong>
+                                    <span>vs. Seasonal Naïve</span>
+                                </div>
+                                <p class="takeaway-text">Supera además a SES (+6.18%) y MA28 (+1.43%) en RMSE, y +23.24% en RMSSE vs. Naïve.</p>
+                            </article>
+
+                            <article class="card takeaway-card t-spark reveal d5">
+                                <div class="takeaway-metric">
+                                    <strong class="num">0.7953</strong>
+                                    <span>Lectura honesta RMSSE</span>
+                                </div>
+                                <p class="takeaway-text">MA28/SES (0.779/0.781) aventajan ~2% en series planas, pero RF modela precio, calendario y SNAP.</p>
+                            </article>
+                        </div>
+                    </div>
+
+                    <footer class="slide-footer">
+                        <span>Fuente: outputs/tables/validation_metrics_summary.csv · fig01_validation_metrics_comparison.png</span>
+                        <span class="slide-num">05 / 12</span>
+                    </footer>
+                </div>
+            </section>
+
+            <!-- ==================================================================
+                 SLIDE 6 — VARIABLES CLAVE (FIG03) Y VOLATILIDAD SNAP (FIG02) · BLOQUE 2
+                 ================================================================== -->
+            <section class="slide slide-light"
+                     data-slide="6"
+                     data-speaker="Bloque 2 · Felix Delgado, Alexander"
+                     data-time="2:05 – 2:30"
+                     data-notes="Al abrir la caja del modelo operativo final (fig03), las 5 variables de memoria de demanda >= t-28 concentran 91.8% de importancia, seguidas por precios con 3.96%. Además, el desglose de fig02 muestra que en días SNAP el RMSE aumenta +3.56%, validando el calendario promocional SNAP; CA_3 logra el mejor RMSSE (0.763) y CA_2 mayor volatilidad (0.864).">
+                <div class="brand-topbar"></div>
+                <div class="slide-shell">
+                    <header class="slide-header reveal d1">
+                        <div class="header-meta">
+                            <span class="eyebrow">05 · Interpretabilidad del Modelo y Volatilidad SNAP</span>
+                            <span class="speaker-chip"><span class="dot"></span>Alexander Felix · Bloque 2</span>
+                        </div>
+                        <h2 class="slide-title">La memoria histórica explica 91.8%; los pagos SNAP elevan la volatilidad</h2>
+                    </header>
+
+                    <div class="slide-body">
+                        <div class="s6-split">
+                            <div class="figure-card reveal d2">
+                                <img src="assets/fig03_feature_importance_rf.png" alt="Ranking de importancia relativa de las 16 variables predictoras en Random Forest">
+                            </div>
+
+                            <div class="s6-right">
+                                <article class="card insight-block reveal d3">
+                                    <div class="insight-kicker">Drivers de Demanda (&ge; t-28)</div>
+                                    <div class="insight-row">
+                                        <strong class="num">91.8%</strong>
+                                        <span>Memoria reciente</span>
+                                    </div>
+                                    <p class="insight-p">Liderada por rolling_mean_28 (29.6%), rolling_mean_7 (23.5%) y lag_28 (15.9%).</p>
+                                </article>
+
+                                <article class="card insight-block b-spark reveal d4">
+                                    <div class="insight-kicker">Palanca Comercial Directa</div>
+                                    <div class="insight-row">
+                                        <strong class="num">3.96%</strong>
+                                        <span>Dinámica de precios</span>
+                                    </div>
+                                    <p class="insight-p">sell_price (2.19%) y relative_price (1.74%) conectan la elasticidad con el pronóstico.</p>
+                                </article>
+
+                                <article class="snap-summary-card reveal d5">
+                                    <div>
+                                        <div class="kicker">Resumen Fig. 02 · Volatilidad SNAP y Tiendas</div>
+                                        <div class="snap-stat-line">
+                                            <strong class="num">+3.56%</strong>
+                                            <span>RMSE en días snap_CA = 1</span>
+                                        </div>
+                                        <p class="snap-note">RMSE sube de 2.684 a 2.780 en días SNAP por picos de consumo, pero el RMSSE sigue calibrado (0.779 vs. 0.781).</p>
+                                    </div>
+                                    <div class="store-mini-grid">
+                                        <div class="store-mini best">
+                                            <div class="st-name">CA_3</div>
+                                            <div class="st-val num">0.763</div>
+                                        </div>
+                                        <div class="store-mini">
+                                            <div class="st-name">CA_1</div>
+                                            <div class="st-val num">0.767</div>
+                                        </div>
+                                        <div class="store-mini">
+                                            <div class="st-name">CA_4</div>
+                                            <div class="st-val num">0.787</div>
+                                        </div>
+                                        <div class="store-mini warn">
+                                            <div class="st-name">CA_2</div>
+                                            <div class="st-val num">0.864</div>
+                                        </div>
+                                    </div>
+                                </article>
+                            </div>
+                        </div>
+                    </div>
+
+                    <footer class="slide-footer">
+                        <span>Fuente: feature_importance.csv &amp; validation_breakdown_store_snap.csv (fig02 y fig03)</span>
+                        <span class="slide-num">06 / 12</span>
+                    </footer>
+                </div>
+            </section>
+
+            <!-- ==================================================================
+                 SLIDE 7 — DIAGNÓSTICO DE RIESGO EN 28 DÍAS (FIG05) · BLOQUE 3
+                 ================================================================== -->
+            <section class="slide slide-light"
+                     data-slide="7"
+                     data-speaker="Bloque 3 · Siccha Dávila, Angel"
+                     data-time="2:30 – 2:55"
+                     data-notes="Al traducir el pronóstico a dinero real (v90 vs pred_v28 a precio vigente), cuantificamos $59,362 USD en Ingreso en Riesgo para los próximos 28 días. El 56.4% del portafolio está en Riesgo Alto o Medio (83.1% del dinero), y la tienda CA_3 lidera sola con $25,363 USD, es decir el 42.7% del riesgo total.">
+                <div class="brand-topbar"></div>
+                <div class="slide-shell">
+                    <header class="slide-header reveal d1">
+                        <div class="header-meta">
+                            <span class="eyebrow">06 · Diagnóstico Comercial a 28 Días</span>
+                            <span class="speaker-chip"><span class="dot"></span>Angel Siccha · Bloque 3</span>
+                        </div>
+                        <h2 class="slide-title">$59,362 USD en riesgo concentrados en CA_3 (42.7%) y FOODS_3 (59.8%)</h2>
+                    </header>
+
+                    <div class="slide-body">
+                        <div class="s7-kpis">
+                            <article class="card giant-kpi k-danger reveal d2">
+                                <div class="giant-kpi-lbl">Ingreso en Riesgo (28 días)</div>
+                                <div class="giant-kpi-val num">$59,362</div>
+                                <div class="giant-kpi-sub">22,114 unidades en desaceleración real (v90 vs. pred_v28)</div>
+                            </article>
+
+                            <article class="card giant-kpi k-spark reveal d3">
+                                <div class="giant-kpi-lbl">Portafolio Accionable</div>
+                                <div class="giant-kpi-val num">56.4%</div>
+                                <div class="giant-kpi-sub">3,243 SKUs en Riesgo Alto/Medio (83.1% del dinero)</div>
+                            </article>
+
+                            <article class="card giant-kpi k-blue reveal d4">
+                                <div class="giant-kpi-lbl">Tienda Prioritaria · CA_3</div>
+                                <div class="giant-kpi-val num">$25,363</div>
+                                <div class="giant-kpi-sub">42.7% del riesgo total · Corte p80 = $20.14 USD</div>
+                            </article>
+                        </div>
+
+                        <div class="figure-card s7-fig reveal d5">
+                            <img src="assets/fig05_risk_distribution_store_dept.png" alt="Distribución de Ingreso en Riesgo por tienda CA_1 a CA_4 y departamento FOODS_1 a FOODS_3">
+                        </div>
+                    </div>
+
+                    <footer class="slide-footer">
+                        <span>Fuente: diagnosis_audit.json &amp; risk_summary_by_store_dept.csv · fig05_risk_distribution_store_dept.png</span>
+                        <span class="slide-num">07 / 12</span>
+                    </footer>
+                </div>
+            </section>
+
+            <!-- ==================================================================
+                 SLIDE 8 — SEGMENTACIÓN K-MEANS Y PARETO (FIG06 + FIG07) · BLOQUE 3
+                 ================================================================== -->
+            <section class="slide slide-light"
+                     data-slide="8"
+                     data-speaker="Bloque 3 · Siccha Dávila, Angel"
+                     data-time="2:55 – 3:20"
+                     data-notes="Con K-Means estandarizado y winsorización controlada, K=4 logra el óptimo operativo (Silueta 0.2824). El resultado más potente del estudio es un hallazgo Pareto extremo: el Clúster C3 reúne apenas el 11.4% de los productos (653 SKUs) pero concentra el 72.7% de todo el Ingreso en Riesgo ($43,127 USD).">
+                <div class="brand-topbar"></div>
+                <div class="slide-shell">
+                    <header class="slide-header reveal d1">
+                        <div class="header-meta">
+                            <span class="eyebrow">07 · Segmentación K-Means (K = 4) y Hallazgo Pareto</span>
+                            <span class="speaker-chip"><span class="dot"></span>Angel Siccha · Bloque 3</span>
+                        </div>
+                        <h2 class="slide-title">Clúster C3 (11.4% de SKUs) concentra el 72.7% del Ingreso en Riesgo</h2>
+                    </header>
+
+                    <div class="slide-body">
+                        <div class="s8-split">
+                            <div class="s8-charts">
+                                <div class="figure-card reveal d2">
+                                    <img src="assets/fig06_kmeans_elbow_silhouette.png" alt="Método del Codo WCSS y Coeficiente de Silueta para K=2 a 6">
+                                </div>
+                                <div class="figure-card reveal d3">
+                                    <img src="assets/fig07_kmeans_cluster_profiles.png" alt="Perfiles empíricos de los 4 clústeres K-Means y concentración Pareto">
+                                </div>
+                            </div>
+
+                            <div class="s8-right">
+                                <article class="pareto-hero reveal d4">
+                                    <span class="pareto-badge">Hallazgo Pareto · Clúster C3</span>
+                                    <div>
+                                        <div class="pareto-ratio">
+                                            <span class="small-pct num">11.4%</span>
+                                            <span class="arrow-p">→</span>
+                                            <span class="big-pct num">72.7%</span>
+                                        </div>
+                                        <p class="pareto-caption">
+                                            Solo 653 SKUs concentran $43,127 USD del riesgo total ($66.04/SKU · declive 20.4%).
+                                        </p>
+                                    </div>
+                                    <div class="pareto-footer-pill">
+                                        <span>Validación óptima: <strong>K = 4</strong></span>
+                                        <span>Silueta: <strong class="num">0.2824</strong></span>
+                                    </div>
+                                </article>
+
+                                <article class="card cluster-mini-card reveal d5">
+                                    <div class="cluster-mini-title">Mapa de los 4 Arquetipos (5,748 series)</div>
+                                    <div class="cluster-list">
+                                        <div class="cluster-item c-crit">
+                                            <span class="c-tag">C3</span>
+                                            <span class="c-name">Desaceleración Crítica</span>
+                                            <span class="c-stat num">653 · 72.7% USD</span>
+                                        </div>
+                                        <div class="cluster-item">
+                                            <span class="c-tag">C1</span>
+                                            <span class="c-name">Alta Rotación / Ancla</span>
+                                            <span class="c-stat num">1,322 · 4.67 u/d</span>
+                                        </div>
+                                        <div class="cluster-item">
+                                            <span class="c-tag">C2</span>
+                                            <span class="c-name">Cola Larga Intermitente</span>
+                                            <span class="c-stat num">3,545 · 62.4% ceros</span>
+                                        </div>
+                                        <div class="cluster-item">
+                                            <span class="c-tag">C0</span>
+                                            <span class="c-name">Alta Elasticidad Precio</span>
+                                            <span class="c-stat num">228 · +620% oferta</span>
+                                        </div>
+                                    </div>
+                                </article>
+                            </div>
+                        </div>
+                    </div>
+
+                    <footer class="slide-footer">
+                        <span>Fuente: kmeans_evaluation.csv &amp; kmeans_cluster_profiles.csv · fig06 y fig07</span>
+                        <span class="slide-num">08 / 12</span>
+                    </footer>
+                </div>
+            </section>
+
+            <!-- ==================================================================
+                 SLIDE 9 — PLAN PRESCRIPTIVO DE MARKETING (FIG08) · BLOQUE 3
+                 ================================================================== -->
+            <section class="slide slide-light"
+                     data-slide="9"
+                     data-speaker="Bloque 3 · Siccha Dávila, Angel"
+                     data-time="3:20 – 3:45"
+                     data-notes="El motor prescriptivo bloquea rebajas donde destruyen margen: el 73.0% del riesgo (2,818 SKUs) recibe Cross-Selling sin descuento junto a un producto ancla. El Markdown 20%–35% se reserva solo a 425 SKUs elásticos con FEFO y ajuste -20%/-30%. Transversalmente, 1,831 SKUs (40.4% riesgo) siguen plan SNAP bifásico.">
+                <div class="brand-topbar"></div>
+                <div class="slide-shell">
+                    <header class="slide-header reveal d1">
+                        <div class="header-meta">
+                            <span class="eyebrow">08 · Plan Prescriptivo de Marketing</span>
+                            <span class="speaker-chip"><span class="dot"></span>Angel Siccha · Bloque 3</span>
+                        </div>
+                        <h2 class="slide-title">Proteger 73.0% del riesgo sin descuentos y focalizar Markdown en 425 SKUs</h2>
+                    </header>
+
+                    <div class="slide-body">
+                        <div class="figure-card s9-fig reveal d2">
+                            <img src="assets/fig08_prescriptive_marketing_revenue_risk.png" alt="Cobertura de Ingreso en Riesgo y SKUs por estrategia del motor prescriptivo">
+                        </div>
+
+                        <div class="s9-tactics">
+                            <article class="card tactic-card reveal d3">
+                                <div class="tactic-head">
+                                    <span class="tactic-pill">TÁCTICA 1 · SIN DESCUENTO</span>
+                                    <span class="tactic-kpi num">73.0%</span>
+                                </div>
+                                <div>
+                                    <h3 class="tactic-title">Cross-Selling con Ancla</h3>
+                                    <p class="tactic-body">2,818 SKUs inelásticos ($43,336) empaquetados con líderes de pasillo (ej. FOODS_3_090). Cero erosión de margen.</p>
+                                </div>
+                            </article>
+
+                            <article class="card tactic-card tac-red reveal d4">
+                                <div class="tactic-head">
+                                    <span class="tactic-pill">TÁCTICA 2 · MARKDOWN 20–35%</span>
+                                    <span class="tactic-kpi num">425 SKUs</span>
+                                </div>
+                                <div>
+                                    <h3 class="tactic-title">Rebaja Selectiva + FEFO</h3>
+                                    <p class="tactic-body">Solo SKUs con elasticidad probada ($5,994) + alerta de recorte de pedido -20%/-30% contra stockpiling.</p>
+                                </div>
+                            </article>
+
+                            <article class="card tactic-card tac-gold reveal d5">
+                                <div class="tactic-head">
+                                    <span class="tactic-pill">CAPA TRANSVERSAL SNAP</span>
+                                    <span class="tactic-kpi num">40.4%</span>
+                                </div>
+                                <div>
+                                    <h3 class="tactic-title">Calendario SNAP Bifásico</h3>
+                                    <p class="tactic-body">1,831 SKUs ($24,009): Fase A (días 1–10: multipacks y stock) y Fase B (días 20–31: cupones dirigidos).</p>
+                                </div>
+                            </article>
+                        </div>
+                    </div>
+
+                    <footer class="slide-footer">
+                        <span>Fuente: src/03_diagnosis_kmeans_marketing.py · fig08_prescriptive_marketing_revenue_risk.png</span>
+                        <span class="slide-num">09 / 12</span>
+                    </footer>
+                </div>
+            </section>
+
+            <!-- ==================================================================
+                 SLIDE 10 — DASHBOARD INTERACTIVO Y DEMO EN VIVO (FIG09 + FIG11) · BLOQUE 4
+                 ================================================================== -->
+            <section class="slide slide-light"
+                     data-slide="10"
+                     data-speaker="Bloque 4 · Zavala Gamero, Piero Rodrigo"
+                     data-time="3:45 – 4:10"
+                     data-notes="Desplegamos todo el motor en un dashboard ejecutivo en Streamlit con 4 pestañas. Veremos en vivo tres casos reales: FOODS_3_282 protegido con Cross-Selling ($1,156), FOODS_3_587 elegible a Markdown (+63.8% elasticidad) y el simulador al 25% que proyecta recuperar +$9,169 USD con control de stockpiling.">
+                <div class="brand-topbar"></div>
+                <div class="slide-shell">
+                    <header class="slide-header reveal d1">
+                        <div class="header-meta">
+                            <span class="eyebrow">09 · Despliegue Operativo y Simulador</span>
+                            <span class="speaker-chip"><span class="dot"></span>Piero Zavala · Bloque 4</span>
+                        </div>
+                        <h2 class="slide-title">Dashboard ejecutivo en Streamlit: decisión por SKU y simulación en vivo</h2>
+                    </header>
+
+                    <div class="slide-body">
+                        <div class="s10-split">
+                            <div class="s10-gallery">
+                                <div class="browser-pair">
+                                    <div class="browser-frame f-tab1 reveal d2">
+                                        <div class="browser-chrome">
+                                            <span class="browser-dots"><i></i><i></i><i></i></span>
+                                            <span>Tab 1 · Resumen Ejecutivo</span>
+                                        </div>
+                                        <div class="browser-body">
+                                            <img src="assets/fig09_dashboard_tab1_resumen.png" alt="Captura del Dashboard Streamlit Pestaña 1 Resumen Ejecutivo">
+                                        </div>
+                                    </div>
+
+                                    <div class="browser-frame f-tab3 reveal d3">
+                                        <div class="browser-chrome">
+                                            <span class="browser-dots"><i></i><i></i><i></i></span>
+                                            <span>Tab 3 · Simulador de Campañas</span>
+                                        </div>
+                                        <div class="browser-body">
+                                            <img src="assets/fig11_dashboard_tab3_simulador.png" alt="Captura del Dashboard Streamlit Pestaña 3 Simulador de Campañas">
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="tech-ribbon reveal d4">
+                                    <span><strong>Streamlit 1.67 + Plotly 7.2</strong> · 4 pestañas ejecutivas</span>
+                                    <span>PyArrow pushdown: <strong>8.58 MB RAM</strong> · Exportación CSV</span>
+                                </div>
+                            </div>
+
+                            <div class="s10-right">
+                                <div class="live-demo-badge reveal d3">
+                                    <span class="live-dot-wrap"><span class="live-dot"></span>Demo en vivo: Streamlit</span>
+                                    <span class="live-time">2 MIN</span>
+                                </div>
+
+                                <article class="card example-card reveal d4">
+                                    <div class="ex-head">
+                                        <span class="ex-sku">FOODS_3_282 · CA_3</span>
+                                        <span class="ex-val num">$1,156</span>
+                                    </div>
+                                    <div class="ex-action">Cross-Selling sin descuento</div>
+                                    <div class="ex-detail">Riesgo Alto (-99% sens. precio) · Empaquetar con ancla FOODS_3_090 + SNAP.</div>
+                                </article>
+
+                                <article class="card example-card ex-red reveal d4">
+                                    <div class="ex-head">
+                                        <span class="ex-sku">FOODS_3_587 · CA_1</span>
+                                        <span class="ex-val num">+63.8%</span>
+                                    </div>
+                                    <div class="ex-action">Markdown 20%–25% + FEFO</div>
+                                    <div class="ex-detail">Elasticidad promocional real comprobada · $424 en riesgo · Recorte -20%/-30%.</div>
+                                </article>
+
+                                <article class="card example-card ex-emerald reveal d5">
+                                    <div class="ex-head">
+                                        <span class="ex-sku">Simulador 25% (ε = 0.6)</span>
+                                        <span class="ex-val num">+$9,169</span>
+                                    </div>
+                                    <div class="ex-action">Ingreso incremental recuperado</div>
+                                    <div class="ex-detail">+18.84% demanda (+4,169 u en 28d) sobre los 425 SKUs aptos para rebaja.</div>
+                                </article>
+                            </div>
+                        </div>
+                    </div>
+
+                    <footer class="slide-footer">
+                        <span>Aplicación: app/dashboard.py · top_50_priority_promotions.csv · fig09 y fig11</span>
+                        <span class="slide-num">10 / 12</span>
+                    </footer>
+                </div>
+            </section>
+
+            <!-- ==================================================================
+                 SLIDE 11 — CONCLUSIONES EMPÍRICAS Y ALCANCES FUTUROS · BLOQUE 4
+                 ================================================================== -->
+            <section class="slide slide-light"
+                     data-slide="11"
+                     data-speaker="Bloque 4 · Zavala Gamero, Piero Rodrigo"
+                     data-time="4:10 – 4:40"
+                     data-notes="Cerramos con cuatro conclusiones cuantitativas —una por cada objetivo específico— que demuestran viabilidad técnica y valor comercial sin inventar datos, junto con tres líneas claras de evolución futura: conexión ERP para stock y costos, escalamiento a TX y WI con ensamble híbrido, y piloto A/B de 8 semanas en CA_3.">
+                <div class="brand-topbar"></div>
+                <div class="slide-shell">
+                    <header class="slide-header reveal d1">
+                        <div class="header-meta">
+                            <span class="eyebrow">10 · Conclusiones Empíricas y Hoja de Ruta</span>
+                            <span class="speaker-chip"><span class="dot"></span>Piero Zavala · Bloque 4</span>
+                        </div>
+                        <h2 class="slide-title">Cuatro objetivos validados con datos reales y tres pasos de escalamiento</h2>
+                    </header>
+
+                    <div class="slide-body">
+                        <div class="s11-split">
+                            <div>
+                                <div class="s11-col-title reveal d2">Conclusiones Cuantitativas (OE1 – OE4)</div>
+                                <div class="conclusions-stack">
+                                    <article class="card conclusion-card reveal d2">
+                                        <div class="oe-circle">OE1</div>
+                                        <div>
+                                            <h3>Datos M5 íntegros y sin fuga temporal</h3>
+                                            <p>5.71M filas activas, 49.89% intermitencia real, -81.28% RAM y PASS 200/200 anti-leakage.</p>
+                                        </div>
+                                    </article>
+
+                                    <article class="card conclusion-card reveal d3">
+                                        <div class="oe-circle">OE2</div>
+                                        <div>
+                                            <h3>Random Forest lidera en RMSE (2.7190)</h3>
+                                            <p>+20.75% vs. Naïve, +6.18% vs. SES y +1.43% vs. MA28, incorporando precio, calendario y SNAP.</p>
+                                        </div>
+                                    </article>
+
+                                    <article class="card conclusion-card reveal d4">
+                                        <div class="oe-circle">OE3</div>
+                                        <div>
+                                            <h3>Exposición comercial geolocalizada</h3>
+                                            <p>$59,362 USD en riesgo a 28d; CA_3 concentra 42.7% y 1,831 SKUs SNAP cubren 40.4%.</p>
+                                        </div>
+                                    </article>
+
+                                    <article class="card conclusion-card reveal d5">
+                                        <div class="oe-circle">OE4</div>
+                                        <div>
+                                            <h3>Segmentación Pareto y prescripción activa</h3>
+                                            <p>K=4 aísla Clúster C3 (11.4% → 72.7% riesgo); 73.0% protegido sin rebajas en Streamlit.</p>
+                                        </div>
+                                    </article>
+                                </div>
+                            </div>
+
+                            <div>
+                                <div class="s11-col-title reveal d2">Alcances y Trabajo Futuro</div>
+                                <div class="future-panel">
+                                    <article class="future-item reveal d3">
+                                        <div class="future-num">HORIZONTE 01 · ERP</div>
+                                        <h3>Integración de stock, COGS y vencimientos</h3>
+                                        <p>Evolucionar del Ingreso en Riesgo hacia margen neto rescatado y merma física evitada.</p>
+                                    </article>
+
+                                    <article class="future-item f-blue reveal d4">
+                                        <div class="future-num">HORIZONTE 02 · ESCALAMIENTO</div>
+                                        <h3>Expansión TX / WI + ensamble híbrido</h3>
+                                        <p>Combinar Random Forest con SES/Tweedie para sumar precisión en alto volumen e intermitencia.</p>
+                                    </article>
+
+                                    <article class="future-item f-spark reveal d5">
+                                        <div class="future-num">HORIZONTE 03 · CAMPO</div>
+                                        <h3>Piloto A/B de 8 semanas en tienda CA_3</h3>
+                                        <p>Validar elasticidad real en Clúster C3, recorte -20%/-30% y cupones SNAP Fase B.</p>
+                                    </article>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <footer class="slide-footer">
+                        <span>Fuente: outputs/RESULTADOS_PARA_INFORME_WORD.md · Sección 9 (Conclusiones y Recomendaciones)</span>
+                        <span class="slide-num">11 / 12</span>
+                    </footer>
+                </div>
+            </section>
+
+            <!-- ==================================================================
+                 SLIDE 12 — CIERRE OSCURO (#081C30) · BLOQUE 4
+                 ================================================================== -->
+            <section class="slide slide-dark"
+                     data-slide="12"
+                     data-speaker="Bloque 4 · Zavala Gamero, Piero Rodrigo"
+                     data-time="4:40 – 5:00"
+                     data-notes="En resumen: $59,362 USD en riesgo detectados a 28 días, 72.7% concentrado en el Clúster C3 y cero descuentos destructores de margen en productos inelásticos. Muchas gracias: pasamos ahora a nuestra demostración en vivo en Streamlit y quedamos atentos a sus preguntas.">
+                <div class="dark-grid-overlay"></div>
+                <div class="dark-accent-edge"></div>
+                <div class="dark-shell">
+                    <div class="dark-topbar reveal d1">
+                        <div class="brand-lockup">
+                            <svg width="38" height="38" viewBox="0 0 48 48" fill="none" aria-hidden="true">
+                                <g stroke="#FFC220" stroke-width="4.6" stroke-linecap="round">
+                                    <line x1="24" y1="5" x2="24" y2="14"/>
+                                    <line x1="24" y1="34" x2="24" y2="43"/>
+                                    <line x1="7.5" y1="14.5" x2="15.3" y2="19"/>
+                                    <line x1="32.7" y1="29" x2="40.5" y2="33.5"/>
+                                    <line x1="40.5" y1="14.5" x2="32.7" y2="19"/>
+                                    <line x1="15.3" y1="29" x2="7.5" y2="33.5"/>
+                                </g>
+                            </svg>
+                            <span class="brand-tag">Walmart California · FOODS · Resultados Auditados</span>
+                        </div>
+                        <span class="course-pill">UNDC 2026</span>
+                    </div>
+
+                    <div>
+                        <div class="closing-kpis">
+                            <article class="closing-card reveal d2">
+                                <div class="closing-val num">$59,362</div>
+                                <div class="closing-lbl">USD detectados en 28 días</div>
+                                <div class="closing-sub">22,114 unidades en desaceleración sobre 5,748 series reales M5.</div>
+                            </article>
+
+                            <article class="closing-card c-blue reveal d3">
+                                <div class="closing-val num">72.7%</div>
+                                <div class="closing-lbl">Concentrado en Clúster C3</div>
+                                <div class="closing-sub">Solo 653 SKUs (11.4%) concentran $43,127 USD de impacto prioritario.</div>
+                            </article>
+
+                            <article class="closing-card c-emerald reveal d4">
+                                <div class="closing-val num">0</div>
+                                <div class="closing-lbl">Descuentos que destruyen margen</div>
+                                <div class="closing-sub">2,818 SKUs inelásticos protegidos con Cross-Selling; Markdown solo en 425 elásticos.</div>
+                            </article>
+                        </div>
+
+                        <div class="closing-cta reveal d5">
+                            <div class="spark-rule"></div>
+                            <h1 class="closing-title">Gracias — <span>Preguntas y Demo en Vivo</span></h1>
+                            <p class="closing-subline">Prototipo interactivo disponible en Streamlit · IA Aplicada al Marketing Digital · Ingeniería de Sistemas UNDC</p>
+                        </div>
+                    </div>
+
+                    <div class="team-grid reveal d5">
+                        <div class="team-card">
+                            <div class="block-label">Integrante 1</div>
+                            <div class="member-name">Chulluncuy Cambillo, Adolfo Milton</div>
+                        </div>
+                        <div class="team-card">
+                            <div class="block-label">Integrante 2</div>
+                            <div class="member-name">Felix Delgado, Alexander</div>
+                        </div>
+                        <div class="team-card">
+                            <div class="block-label">Integrante 3</div>
+                            <div class="member-name">Siccha Dávila, Angel</div>
+                        </div>
+                        <div class="team-card">
+                            <div class="block-label">Integrante 4</div>
+                            <div class="member-name">Zavala Gamero, Piero Rodrigo</div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+        </main>
+    </div>
+
+    <!-- Discreet Speaker Notes Drawer (Toggle with N) -->
+    <aside class="notes-drawer" id="notesDrawer" aria-label="Notas del expositor">
+        <div class="notes-head">
+            <span id="notesMeta">Bloque 1</span>
+            <span>Atajo: N para ocultar</span>
+        </div>
+        <p class="notes-body" id="notesBody"></p>
+    </aside>
+
+    <!-- Floating Navigation Controls (Outside 1920×1080 Stage) -->
+    <nav class="deck-controls" id="deckControls" aria-label="Controles de diapositivas">
+        <button class="ctrl-btn" id="prevBtn" type="button" title="Anterior (←)">←</button>
+        <span class="ctrl-counter" id="slideCounter">01 / 12</span>
+        <button class="ctrl-btn" id="nextBtn" type="button" title="Siguiente (→)">→</button>
+        <button class="ctrl-btn" id="notesBtn" type="button" title="Notas del orador (N)">Notas (N)</button>
+        <button class="ctrl-btn" id="fsBtn" type="button" title="Pantalla completa (F)">⛶</button>
+    </nav>
+
+    <script>
+        /* ==========================================================================
+           SLIDE PRESENTATION CONTROLLER (FIXED 16:9 STAGE + NAV + NOTES + INLINE EDIT)
+           ========================================================================== */
+        class SlidePresentation {
+            constructor() {
+                this.slides = Array.from(document.querySelectorAll('.slide'));
+                this.stage = document.getElementById('deckStage');
+                this.progressFill = document.getElementById('progressFill');
+                this.counterEl = document.getElementById('slideCounter');
+                this.notesDrawer = document.getElementById('notesDrawer');
+                this.notesMeta = document.getElementById('notesMeta');
+                this.notesBody = document.getElementById('notesBody');
+                this.notesBtn = document.getElementById('notesBtn');
+                this.controls = document.getElementById('deckControls');
+
+                this.currentSlide = 0;
+                this.notesOpen = false;
+                this.wheelLocked = false;
+                this.touchStartX = 0;
+
+                this.setupStageScale();
+                this.setupControls();
+                this.setupKeyboardNav();
+                this.setupTouchAndWheel();
+                this.syncFromHash();
+                window.addEventListener('hashchange', () => this.syncFromHash());
+            }
+
+            /* Escala uniforme del lienzo 1920×1080 al viewport sin reflow */
+            setupStageScale() {
+                const applyScale = () => {
+                    const factor = Math.min(window.innerWidth / 1920, window.innerHeight / 1080);
+                    const x = (window.innerWidth - 1920 * factor) / 2;
+                    const y = (window.innerHeight - 1080 * factor) / 2;
+                    this.stage.style.transform = `translate(${x}px, ${y}px) scale(${factor})`;
+                };
+                applyScale();
+                window.addEventListener('resize', applyScale);
+            }
+
+            setupControls() {
+                document.getElementById('prevBtn').addEventListener('click', () => this.prev());
+                document.getElementById('nextBtn').addEventListener('click', () => this.next());
+                this.notesBtn.addEventListener('click', () => this.toggleNotes());
+                document.getElementById('fsBtn').addEventListener('click', () => this.toggleFullscreen());
+            }
+
+            setupKeyboardNav() {
+                document.addEventListener('keydown', (e) => {
+                    if (e.target && e.target.getAttribute && e.target.getAttribute('contenteditable') === 'true') {
+                        return;
+                    }
+                    if (e.key === 'ArrowRight' || e.key === 'ArrowDown' || e.key === 'PageDown' || e.key === ' ') {
+                        e.preventDefault();
+                        this.next();
+                    } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp' || e.key === 'PageUp') {
+                        e.preventDefault();
+                        this.prev();
+                    } else if (e.key === 'Home') {
+                        e.preventDefault();
+                        this.goTo(0);
+                    } else if (e.key === 'End') {
+                        e.preventDefault();
+                        this.goTo(this.slides.length - 1);
+                    } else if (e.key === 'n' || e.key === 'N') {
+                        e.preventDefault();
+                        this.toggleNotes();
+                    } else if (e.key === 'f' || e.key === 'F') {
+                        e.preventDefault();
+                        this.toggleFullscreen();
+                    }
+                });
+            }
+
+            setupTouchAndWheel() {
+                window.addEventListener('touchstart', (e) => {
+                    this.touchStartX = e.changedTouches[0].screenX;
+                }, { passive: true });
+
+                window.addEventListener('touchend', (e) => {
+                    const dx = e.changedTouches[0].screenX - this.touchStartX;
+                    if (Math.abs(dx) > 48) {
+                        dx < 0 ? this.next() : this.prev();
+                    }
+                }, { passive: true });
+
+                window.addEventListener('wheel', (e) => {
+                    if (this.wheelLocked || Math.abs(e.deltaY) < 28) return;
+                    this.wheelLocked = true;
+                    e.deltaY > 0 ? this.next() : this.prev();
+                    setTimeout(() => { this.wheelLocked = false; }, 380);
+                }, { passive: true });
+            }
+
+            syncFromHash() {
+                const match = window.location.hash.match(/slide-(\d+)/);
+                const idx = match ? parseInt(match[1], 10) - 1 : 0;
+                this.goTo(Number.isNaN(idx) ? 0 : idx, false);
+            }
+
+            goTo(index, updateHash = true) {
+                const clamped = Math.max(0, Math.min(index, this.slides.length - 1));
+                this.currentSlide = clamped;
+
+                this.slides.forEach((slide, i) => {
+                    const isCurrent = i === clamped;
+                    slide.classList.toggle('active', isCurrent);
+                    slide.classList.toggle('visible', isCurrent);
+                });
+
+                const pct = ((clamped + 1) / this.slides.length) * 100;
+                this.progressFill.style.width = `${pct}%`;
+                this.counterEl.textContent = `${String(clamped + 1).padStart(2, '0')} / ${this.slides.length}`;
+
+                const activeSlide = this.slides[clamped];
+                this.notesMeta.textContent = `Slide ${clamped + 1} · ${activeSlide.dataset.speaker || ''} · ${activeSlide.dataset.time || ''}`;
+                this.notesBody.textContent = activeSlide.dataset.notes || '';
+
+                if (updateHash) {
+                    history.replaceState(null, '', `#slide-${clamped + 1}`);
+                }
+            }
+
+            next() { this.goTo(this.currentSlide + 1); }
+            prev() { this.goTo(this.currentSlide - 1); }
+
+            toggleNotes() {
+                this.notesOpen = !this.notesOpen;
+                this.notesDrawer.classList.toggle('open', this.notesOpen);
+                this.notesBtn.classList.toggle('active', this.notesOpen);
+                this.controls.classList.toggle('pinned', this.notesOpen);
+            }
+
+            toggleFullscreen() {
+                if (!document.fullscreenElement) {
+                    document.documentElement.requestFullscreen?.().catch(() => {});
+                } else {
+                    document.exitFullscreen?.().catch(() => {});
+                }
+            }
+        }
+
+        /* ==========================================================================
+           INLINE EDITOR CONTROLLER (E KEY + TOP-LEFT HOTZONE WITH 400MS GRACE)
+           ========================================================================== */
+        class InlineSlideEditor {
+            constructor() {
+                this.storageKey = 'walmart_m5_deck_edits_v1';
+                this.isActive = false;
+                this.editableSelector = 'h1, h2, h3, p, .pillar-stat, .hero-stat-val, .giant-kpi-val, .tech-val, .closing-val, .member-name, .transparency-text, .ex-action, .ex-detail';
+                this.editToggle = document.getElementById('editToggle');
+                this.editBanner = document.getElementById('editBanner');
+                this.hotzone = document.querySelector('.edit-hotzone');
+                this.hideTimeout = null;
+
+                this.assignIds();
+                this.restoreEdits();
+                this.bindEvents();
+            }
+
+            assignIds() {
+                const nodes = document.querySelectorAll(this.editableSelector);
+                nodes.forEach((el, idx) => {
+                    if (!el.dataset.editId) el.dataset.editId = `ed-${idx}`;
+                });
+            }
+
+            bindEvents() {
+                /* 1. Toggle button click */
+                this.editToggle.addEventListener('click', () => this.toggleEditMode());
+
+                /* 2. Hotzone hover with 400ms grace timeout (JS-only, no CSS ~ sibling) */
+                this.hotzone.addEventListener('mouseenter', () => {
+                    clearTimeout(this.hideTimeout);
+                    this.editToggle.classList.add('show');
+                });
+                this.hotzone.addEventListener('mouseleave', () => {
+                    this.hideTimeout = setTimeout(() => {
+                        if (!this.isActive) this.editToggle.classList.remove('show');
+                    }, 400);
+                });
+                this.editToggle.addEventListener('mouseenter', () => {
+                    clearTimeout(this.hideTimeout);
+                });
+                this.editToggle.addEventListener('mouseleave', () => {
+                    this.hideTimeout = setTimeout(() => {
+                        if (!this.isActive) this.editToggle.classList.remove('show');
+                    }, 400);
+                });
+
+                /* 3. Hotzone direct click */
+                this.hotzone.addEventListener('click', () => this.toggleEditMode());
+
+                /* 4. Keyboard shortcuts (E to toggle, Ctrl+S to export) */
+                document.addEventListener('keydown', (e) => {
+                    const editingNow = e.target && e.target.getAttribute && e.target.getAttribute('contenteditable') === 'true';
+                    if ((e.key === 'e' || e.key === 'E') && !editingNow) {
+                        e.preventDefault();
+                        this.toggleEditMode();
+                    } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's' && this.isActive) {
+                        e.preventDefault();
+                        this.downloadEditedHtml();
+                    }
+                });
+
+                document.getElementById('saveHtmlBtn').addEventListener('click', () => this.downloadEditedHtml());
+                document.getElementById('resetEditsBtn').addEventListener('click', () => this.resetEdits());
+
+                /* Auto-save text edits to localStorage */
+                document.getElementById('deckStage').addEventListener('input', (e) => {
+                    const id = e.target?.dataset?.editId;
+                    if (!id) return;
+                    const saved = this.loadStore();
+                    saved[id] = e.target.innerHTML;
+                    try { localStorage.setItem(this.storageKey, JSON.stringify(saved)); } catch (_) {}
+                });
+            }
+
+            toggleEditMode() {
+                this.isActive = !this.isActive;
+                document.body.classList.toggle('editing-mode', this.isActive);
+                this.editToggle.classList.toggle('active', this.isActive);
+                this.editToggle.classList.toggle('show', this.isActive);
+                this.editBanner.classList.toggle('active', this.isActive);
+                this.editToggle.textContent = this.isActive ? 'Listo (E)' : 'Editar (E)';
+
+                document.querySelectorAll(this.editableSelector).forEach((el) => {
+                    if (this.isActive) {
+                        el.setAttribute('contenteditable', 'true');
+                    } else {
+                        el.removeAttribute('contenteditable');
+                    }
+                });
+            }
+
+            loadStore() {
+                try { return JSON.parse(localStorage.getItem(this.storageKey) || '{}'); } catch (_) { return {}; }
+            }
+
+            restoreEdits() {
+                const saved = this.loadStore();
+                Object.entries(saved).forEach(([id, html]) => {
+                    const el = document.querySelector(`[data-edit-id="${id}"]`);
+                    if (el) el.innerHTML = html;
+                });
+            }
+
+            resetEdits() {
+                try { localStorage.removeItem(this.storageKey); } catch (_) {}
+                window.location.reload();
+            }
+
+            downloadEditedHtml() {
+                const wasActive = this.isActive;
+                if (wasActive) this.toggleEditMode();
+                const docHtml = '<!DOCTYPE html>\n' + document.documentElement.outerHTML;
+                const blob = new Blob([docHtml], { type: 'text/html;charset=utf-8' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'index.html';
+                a.click();
+                URL.revokeObjectURL(url);
+                if (wasActive) this.toggleEditMode();
+            }
+        }
+
+        window.deck = new SlidePresentation();
+        window.editor = new InlineSlideEditor();
+    </script>
+</body>
+</html>

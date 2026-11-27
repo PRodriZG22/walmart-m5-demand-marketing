@@ -1,0 +1,85 @@
+{
+  "status": "PASS",
+  "output_file": "C:\\Users\\Piero\\Antigravity\\walmart-m5-demand-marketing\\outputs\\RESULTADOS_PARA_INFORME_WORD.md",
+  "characters": 35304,
+  "lines": 260,
+  "verified_figures_count": 8,
+  "verified_figures": [
+    {
+      "figure": "Figura 1",
+      "filename": "fig01_validation_metrics_comparison.png",
+      "section": "8.2. Evaluación Predictiva",
+      "caption": "Comparativa global de error (MAE, RMSE y RMSSE) y estabilidad temporal por ventana rodante: Random Forest frente a líneas base.",
+      "size_kb": 329.4
+    },
+    {
+      "figure": "Figura 2",
+      "filename": "fig02_rmsse_store_snap_breakdown.png",
+      "section": "8.2. Evaluación Predictiva",
+      "caption": "Desglose del RMSSE de Random Forest por tienda de California (CA_1–CA_4), departamento (FOODS_1–3) y días con beneficio SNAP (snap_CA).",
+      "size_kb": 218.3
+    },
+    {
+      "figure": "Figura 3",
+      "filename": "fig03_feature_importance_rf.png",
+      "section": "8.2. Evaluación Predictiva",
+      "caption": "Ranking de importancia relativa de las 16 variables predictoras en el modelo operativo Random Forest final.",
+      "size_kb": 237.2
+    },
+    {
+      "figure": "Figura 4",
+      "filename": "fig04_actual_vs_forecast_examples.png",
+      "section": "8.2. Evaluación Predictiva",
+      "caption": "Series reales frente a validación Ventana 4 y pronóstico operativo a 28 días (d_1942–d_1969) en tres arquetipos representativos de demanda.",
+      "size_kb": 776.0
+    },
+    {
+      "figure": "Figura 5",
+      "filename": "fig05_risk_distribution_store_dept.png",
+      "section": "8.3. Diagnóstico Comercial y Riesgo",
+      "caption": "Distribución del Ingreso en Riesgo proyectado a 28 días (USD) y conteo de SKUs por tienda, departamento y nivel de riesgo.",
+      "size_kb": 268.5
+    },
+    {
+      "figure": "Figura 6",
+      "filename": "fig06_kmeans_elbow_silhouette.png",
+      "section": "8.4. Segmentación K-Means",
+      "caption": "Validación empírica del número óptimo de clústeres (K = 2..6): Método del Codo (WCSS) y Coeficiente de Silueta.",
+      "size_kb": 258.6
+    },
+    {
+      "figure": "Figura 7",
+      "filename": "fig07_kmeans_cluster_profiles.png",
+      "section": "8.4. Segmentación K-Means",
+      "caption": "Perfiles empíricos de los 4 clústeres K-Means (centroides reales y concentración del Ingreso en Riesgo USD frente al volumen de SKUs).",
+      "size_kb": 376.2
+    },
+    {
+      "figure": "Figura 8",
+      "filename": "fig08_prescriptive_marketing_revenue_risk.png",
+      "section": "8.5. Plan Promocional Prescriptivo",
+      "caption": "Cobertura de portafolio e Ingreso en Riesgo (USD) asignado a cada línea del motor prescriptivo de marketing y capa transversal SNAP.",
+      "size_kb": 261.0
+    }
+  ],
+  "slide5_key_replacements": {
+    "placeholder_37pct_baja_rotacion": {
+      "actionable_risk_skus_pct": 56.42,
+      "actionable_risk_skus_count": 3243,
+      "global_intermittency_3y_pct": 49.89,
+      "cluster_c3_sku_pct": 11.36,
+      "cluster_c3_revenue_risk_share_pct": 72.65
+    },
+    "placeholder_usd_1_2m_ingreso_riesgo": {
+      "real_28d_revenue_at_risk_usd": 59362.23,
+      "real_28d_units_at_risk": 22113.87,
+      "ca3_revenue_at_risk_usd": 25363.34,
+      "ca3_share_pct": 42.73
+    },
+    "real_product_examples": {
+      "Producto_A_replacement": "FOODS_3_282_CA_3_evaluation",
+      "Producto_B_replacement": "FOODS_3_587_CA_1_evaluation",
+      "Producto_C_replacement": "FOODS_2_029_CA_3_evaluation"
+    }
+  }
+}

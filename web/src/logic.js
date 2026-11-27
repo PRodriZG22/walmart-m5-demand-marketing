@@ -90,7 +90,7 @@ export function scenario(rows, d, eps) {
 export const defaults = (view, clusters) => ({
   tienda: STORES,
   depto: DEPTS,
-  riesgo: view === 'gestor' ? RISKS.slice(0, 2) : RISKS,
+  riesgo: RISKS,
   q: '',
   estrategia: view === 'gestor' ? [MARKDOWN, CROSS] : Object.values(STRATEGY_URL),
   grupo: clusters,
@@ -139,7 +139,22 @@ export function filtersToUrl(view, filters, clusters) {
   window.history.replaceState(null, '', `?${params}`)
 }
 
-export function applyFilters(diag, view, f) {
+// ---- Atajos «¿Qué quieres hacer?»: cada uno fija prioridad y estrategia a la vez ----
+const ALL_STRATEGIES = Object.values(STRATEGY_URL)
+export const ACTIONS = [
+  { key: 'todo', label: 'Ver todo', desc: 'Todos los productos', riesgo: RISKS, estrategia: ALL_STRATEGIES },
+  { key: 'intervenir', label: 'Por intervenir', desc: 'Todos los de riesgo alto o medio', riesgo: RISKS, estrategia: [MARKDOWN, CROSS], views: ['gestor'] },
+  { key: 'urgentes', label: 'Casos urgentes', desc: 'Solo riesgo alto', riesgo: [RISKS[0]], estrategia: ALL_STRATEGIES },
+  { key: 'rebaja', label: 'Probar rebajas', desc: 'Antes respondieron a un descuento', riesgo: RISKS, estrategia: [MARKDOWN] },
+  { key: 'combo', label: 'Ofrecer en combo', desc: 'En riesgo, sin bajar el precio', riesgo: RISKS, estrategia: [CROSS] },
+  { key: 'snap', label: 'Días de pago SNAP', desc: 'Reforzar stock del 1 al 10', riesgo: RISKS, estrategia: [STRATEGY_URL.snap] },
+  { key: 'habitual', label: 'Mantener precio', desc: 'Riesgo bajo, sin promoción', riesgo: RISKS, estrategia: [STRATEGY_URL.habitual] },
+]
+const sameSet = (a, b) => a.length === b.length && a.every((v) => b.includes(v))
+export const activeAction = (view, f) => ACTIONS.find((a) => (!a.views || a.views.includes(view))
+  && sameSet(a.riesgo, f.riesgo) && sameSet(a.estrategia, f.estrategia))
+
+function buildTests(view, f) {
   const q = f.q.trim().toLowerCase()
   const matches = (r) => !q || [r.id, r.item_id, r.display_name].some((s) => s.toLowerCase().includes(q))
   const inList = (field, list) => { const s = new Set(list); return (r) => s.has(r[field]) }
@@ -153,6 +168,19 @@ export function applyFilters(diag, view, f) {
   if (view === 'gestor' && f.usd) tests['Solo con ingreso en riesgo'] = (r) => r.revenue_at_risk_usd > 0
   if (f.snap) tests['Solo sensibles a SNAP'] = (r) => r.snap_priority
   if (q) tests['Buscar producto'] = matches
+  return { tests, matches }
+}
+
+// Cuántos casos quedarían con esos filtros (para mostrar cantidades y desactivar opciones vacías).
+export function countRows(diag, view, f) {
+  const all = Object.values(buildTests(view, f).tests)
+  let n = 0
+  for (const r of diag) if (all.every((t) => t(r))) n++
+  return n
+}
+
+export function applyFilters(diag, view, f) {
+  const { tests, matches } = buildTests(view, f)
   const all = Object.values(tests)
   const rows = diag.filter((r) => all.every((t) => t(r))).map((r) => ({ ...r, strategy_short: tr(r.strategy_short, view) }))
   const scope = diag.filter((r) => tests.Tiendas(r) && tests.Departamentos(r) && matches(r))

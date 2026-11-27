@@ -29,7 +29,7 @@ export default function Simulador({ rows, view, filters }) {
   const points = markdown.filter((r) => r.revenue_at_risk_usd > 0)
 
   const reason = !filters.estrategia.includes(MARKDOWN)
-    ? `Agrega «${tr(STRATEGY_SHORT[MARKDOWN], view)}» en el filtro de estrategia.`
+    ? (view === 'analista' ? 'Marca la estrategia de descuentos en el filtro «Estrategia».' : 'Elige «Probar rebajas» en «¿Qué quieres hacer?».')
     : !filters.riesgo.some((r) => r !== 'Riesgo Bajo')
       ? 'Las rebajas solo aplican a riesgo alto o medio: agrega uno en «Nivel de prioridad».'
       : 'Ningún producto de la selección respondió a rebajas en el pasado.'

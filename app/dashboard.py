@@ -34,7 +34,7 @@ st.set_page_config(
     page_title="Walmart California · Radar de Promociones e Ingresos en Riesgo",
     page_icon="📊",
     layout="wide",
-    initial_sidebar_state="expanded",
+    initial_sidebar_state="auto",
 )
 
 # Paleta Apple Bento (DESIGN.md Sección 2)
@@ -65,18 +65,111 @@ STRATEGY_SHORT_LABELS = {
     "Sincronización SNAP (Base EDLP)": "Calendario SNAP (Sin descuento)",
     "Mantenimiento EDLP y Producto Ancla": "Precio Habitual (Producto Ancla)",
 }
-STRATEGY_AXIS_LABELS = {
-    "Cross-Selling y Visibilidad Omnicanal (Sin Descuento)": "Cross-Selling<br>(Sin descuento)",
-    "Mantenimiento EDLP y Producto Ancla": "Precio Habitual<br>(Producto Ancla)",
-    "Precios Dinámicos / Markdown (20%–35%)": "Descuentos<br>(20%–35%)",
-    "Sincronización SNAP (Base EDLP)": "Calendario SNAP<br>(Base EDLP)",
+MARKDOWN = "Precios Dinámicos / Markdown (20%–35%)"
+CROSS = "Cross-Selling y Visibilidad Omnicanal (Sin Descuento)"
+
+# Supuestos de negocio (no se miden en los datos). Cambiarlos aquí actualiza todo el tablero.
+ELASTICIDADES = {"Conservador": 0.4, "Esperado": 0.6, "Optimista": 0.8}
+ESCENARIO_HISTORIAL = "Según historial (acotado)"
+DESCUENTO_MIN, DESCUENTO_MAX, DESCUENTO_BASE = 20, 35, 25
+AJUSTE_REPOSICION = "-20% a -30%"
+# Umbrales de la regla documentada en plan/03 y src/config.py
+INTERMITENCIA_CRITICA = 70.0
+UMBRAL_SNAP_PCT = 15
+AVISO_SIN_VENTAS = "Casi sin ventas"
+AVISO_SIN_MONTO = "Alerta sin monto en riesgo"
+
+# Vistas por tipo de usuario: cambian pestañas, filtros iniciales y vocabulario, nunca los cálculos.
+VISTAS = {
+    "gerente": {
+        "nombre": "Gerente de marketing",
+        "pestanas": [("resumen", "Resumen Ejecutivo"), ("producto", "Decisión por Producto")],
+    },
+    "gestor": {
+        "nombre": "Gestor de categoría o precios",
+        "pestanas": [
+            ("resumen", "Cartera de Decisiones"),
+            ("producto", "Decisión por Producto"),
+            ("simulador", "Simulador y Plan"),
+        ],
+    },
+    "analista": {
+        "nombre": "Analista o docente",
+        "pestanas": [
+            ("auditoria", "Respaldo IA (Auditoría Técnica)"),
+            ("resumen", "Resumen de Negocio"),
+            ("producto", "Decisión por Producto"),
+            ("simulador", "Simulador y Plan"),
+        ],
+    },
 }
-STRATEGY_AXIS_COLORS = {
-    "Cross-Selling<br>(Sin descuento)": APPLE_BLUE,
-    "Descuentos<br>(20%–35%)": APPLE_RED,
-    "Calendario SNAP<br>(Base EDLP)": APPLE_ORANGE,
-    "Precio Habitual<br>(Producto Ancla)": APPLE_GREEN_BRIGHT,
+
+# Reemplazos en orden: primero las frases largas.
+VOCABULARIO = {
+    "gerente": [
+        ("migración operativa LEFO→FEFO", "rotar primero lo que vence antes"),
+        ("Combos Cross-Selling", "Venta conjunta"),
+        ("Cross-Selling", "Venta conjunta"),
+        ("en base EDLP", "con precio habitual"),
+        ("(EDLP)", ""),
+        ("rotación FEFO", "rotación de lo que vence antes"),
+        ("Markdown", "Rebaja temporal"),
+        ("EDLP", "precio habitual"),
+    ],
+    "gestor": [
+        ("migración operativa LEFO→FEFO", "rotación FEFO"),
+        ("Combos Cross-Selling", "Venta cruzada (combo)"),
+        ("Cross-Selling", "Venta cruzada"),
+        ("en base EDLP", "con precio habitual (EDLP)"),
+        ("Markdown", "Rebaja táctica (markdown)"),
+    ],
+    "analista": [],
 }
+
+
+def tr(texto: str, vista: str) -> str:
+    """Adapta un texto al vocabulario de la vista activa."""
+    texto = str(texto)
+    for viejo, nuevo in VOCABULARIO[vista]:
+        texto = texto.replace(viejo, nuevo)
+    return texto
+
+
+def escenario_descuento(df: pd.DataFrame, d: float, eps: float | None) -> dict[str, float]:
+    """Ingreso de 28 días sin y con rebaja.
+
+    Con `eps` usa una respuesta supuesta igual para todos. Con `eps=None` usa la respuesta histórica de cada
+    serie (price_sensitivity), entre 0 y el tope del escenario optimista: es una referencia, no una predicción.
+    """
+    unidades = df["pred_total_28d_units"].astype(float)
+    precio = df["current_price"].astype(float)
+    if eps is None:
+        tope = (1.0 - d) ** (-max(ELASTICIDADES.values())) - 1.0
+        lifts = df["price_sensitivity"].astype(float).fillna(0.0).clip(lower=0.0, upper=tope)
+    else:
+        lifts = pd.Series((1.0 - d) ** (-eps) - 1.0, index=df.index)
+    base = float((unidades * precio).sum())
+    rebaja = -d * base
+    extra = float((unidades * lifts * precio * (1.0 - d)).sum())
+    total_u = float(unidades.sum())
+    extra_u = float((unidades * lifts).sum())
+    return {
+        "lift": extra_u / total_u if total_u else 0.0,
+        "unidades_base": total_u,
+        "unidades_extra": extra_u,
+        "base": base,
+        "rebaja": rebaja,
+        "extra": extra,
+        "con_rebaja": base + rebaja + extra,
+        "neto": rebaja + extra,
+        "lift_equilibrio": d / (1.0 - d),
+    }
+
+
+def usd_signo(v: float) -> str:
+    return f"{'−' if v < 0 else '+'}${abs(v):,.0f}"
+
+
 CLUSTER_PALETTE = [
     APPLE_RED,
     APPLE_BLUE,
@@ -196,12 +289,12 @@ CUSTOM_CSS = f"""
         margin-top: 1rem;
         margin-bottom: 1rem;
     }}
-    @media (max-width: 1180px) {{
+    @media (max-width: 1100px) {{
         .bento-grid-6 {{ grid-template-columns: repeat(3, minmax(0, 1fr)); }}
         .bento-grid-5 {{ grid-template-columns: repeat(3, minmax(0, 1fr)); }}
         .bento-grid-4 {{ grid-template-columns: repeat(2, minmax(0, 1fr)); }}
     }}
-    @media (max-width: 820px) {{
+    @media (max-width: 768px) {{
         .bento-grid-3, .bento-grid-4, .bento-grid-5, .bento-grid-6 {{
             grid-template-columns: 1fr;
         }}
@@ -532,7 +625,7 @@ def format_price_response_human(has_hist: bool, val: float) -> tuple[str, str, s
     if val >= 0.10:
         return f"+{pct:.1f}%", "Responde bien · Apto para rebaja", "kpi-accent-green"
     if val < 0:
-        return f"{pct:.1f}% (No rebajar)", "Inelástico · Proteger margen", "kpi-accent-red"
+        return f"{pct:.1f}% (No rebajar)", "Vendió menos con rebaja (dato observado)", "kpi-accent-red"
     return f"+{pct:.1f}% (No rebajar)", "Respuesta débil · Usar combos", "kpi-accent-amber"
 
 
@@ -548,6 +641,30 @@ def load_diagnosis() -> pd.DataFrame:
     df["has_price_promo_history"] = df["has_price_promo_history"].astype(bool)
     df["strategy_short"] = df["primary_strategy"].map(STRATEGY_SHORT_LABELS).fillna(df["primary_strategy"])
     df["display_name"] = df["id"].map(clean_sku_code)
+    # A1 / V8: avisos de presentación; no cambian la regla de riesgo documentada.
+    casi_sin = (df["risk_level"] == "Riesgo Bajo") & (df["intermittency_pct"] >= INTERMITENCIA_CRITICA)
+    sin_monto = (df["risk_level"] != "Riesgo Bajo") & (df["revenue_at_risk_usd"] <= 0)
+    df["aviso"] = np.select([casi_sin, sin_monto], [AVISO_SIN_VENTAS, AVISO_SIN_MONTO], default="")
+    # A2 / V7: la misma caída medida contra los últimos 28 días.
+    df["riesgo_vs_28d_usd"] = (
+        (df["sales_velocity_28d"] - df["pred_velocity_28d"]).clip(lower=0) * 28 * df["current_price"]
+    )
+    df["caida_previa"] = (df["revenue_at_risk_usd"] > 0) & (df["pred_velocity_28d"] >= df["sales_velocity_28d"])
+    # V10: SNAP ocurre los días 1–10; los días 20–31 son un plan de cupones fuera de SNAP.
+    df["snap_tactical_plan"] = (
+        df["snap_tactical_plan"]
+        .str.replace("Fase A (Días 1–10)", "Días SNAP (1–10)", regex=False)
+        .str.replace(
+            "Fase B (Días 20–31): cupones dirigidos de fin de mes",
+            "Fin de mes, fuera de SNAP (días 20–31): cupones dirigidos",
+            regex=False,
+        )
+    )
+    df["tactical_action"] = df["tactical_action"].str.replace(
+        "demanda inelástica o sin historial promocional",
+        "respuesta baja o negativa, o sin historial de rebajas",
+        regex=False,
+    )
     return df
 
 
@@ -565,7 +682,7 @@ def load_validation_and_kmeans() -> dict[str, pd.DataFrame]:
 
 @st.cache_data(show_spinner="Cargando últimos 90 días reales...")
 def load_history_90d() -> pd.DataFrame:
-    """Lee el dataset ultra-ligero de 90 días (2016-02-23..2016-05-22); usa active_sales_3y.parquet como fallback local."""
+    """Lee el dataset ligero de 90 días; usa active_sales_3y.parquet como respaldo local."""
     cols = ["id", "date", "units_sold", "sell_price", "snap_CA"]
     if DASHBOARD_SALES_90D_PATH.exists():
         df = pd.read_parquet(DASHBOARD_SALES_90D_PATH, columns=cols)
@@ -573,7 +690,7 @@ def load_history_90d() -> pd.DataFrame:
         df = pd.read_parquet(
             ACTIVE_SALES_3Y_PATH,
             columns=cols,
-            filters=[("date", ">=", pd.Timestamp("2016-02-23"))],
+            filters=[("date", ">=", pd.read_parquet(FORECAST_28D_PATH, columns=["date"])["date"].min() - pd.Timedelta(days=90))],
         )
     else:
         raise FileNotFoundError(
@@ -588,7 +705,7 @@ def load_history_90d() -> pd.DataFrame:
 def load_predictions() -> tuple[pd.DataFrame, pd.DataFrame]:
     val_w4 = pd.read_parquet(
         VAL_WINDOW4_PRED_PATH,
-        columns=["id", "date", "pred_rf", "pred_ses", "pred_ma28", "pred_snaive"],
+        columns=["id", "date", "units_sold", "pred_rf", "pred_ses", "pred_ma28", "pred_snaive"],
     )
     val_w4["id"] = val_w4["id"].astype(str)
     forecast = pd.read_parquet(
@@ -710,9 +827,9 @@ def build_forecast_figure(
             x=w4_dates,
             y=w4_rf,
             mode="lines",
-            name="Validación IA reciente",
+            name="Prueba reciente del pronóstico",
             line=dict(color=APPLE_BLUE, width=2.2, dash="dash"),
-            hovertemplate="Validación IA: %{y:.2f} u.<extra></extra>",
+            hovertemplate="Prueba reciente: %{y:.2f} u.<extra></extra>",
         ),
         secondary_y=False,
     )
@@ -765,8 +882,9 @@ def build_forecast_figure(
         secondary_y=True,
     )
 
-    # Línea vertical de corte en ISO exacto "2016-05-22" (cero timestamps numéricos)
-    cutoff_iso = "2016-05-22"
+    # Línea vertical de corte en formato ISO (cero timestamps numéricos)
+    cierre = pd.to_datetime(f_sub["date"]).min() - pd.Timedelta(days=1)
+    cutoff_iso = cierre.strftime("%Y-%m-%d")
     fig_ts.add_shape(
         type="line",
         xref="x",
@@ -782,7 +900,7 @@ def build_forecast_figure(
         y=1.05,
         xref="x",
         yref="paper",
-        text="Cierre histórico (22 May 2016) · Inicio pronóstico 28d",
+        text=f"Cierre histórico ({cierre:%d/%m/%Y}) · Inicio pronóstico 28d",
         showarrow=False,
         xanchor="right",
         font=dict(size=11, color=APPLE_MUTED),
@@ -804,7 +922,10 @@ def build_forecast_figure(
         type="date",
         tickformat="%d %b %Y",
         title_text="",
-        range=["2016-02-22", "2016-06-20"],
+        range=[
+            (cierre - pd.Timedelta(days=90)).strftime("%Y-%m-%d"),
+            (pd.to_datetime(f_sub["date"]).max() + pd.Timedelta(days=1)).strftime("%Y-%m-%d"),
+        ],
     )
     fig_ts.update_yaxes(
         title_text="Unidades por día",
@@ -827,6 +948,354 @@ def build_forecast_figure(
     return fig_ts
 
 
+VACIO = "-"  # marca en la URL para una selección sin opciones
+ESTRATEGIA_URL = {
+    "rebaja": MARKDOWN,
+    "combo": CROSS,
+    "snap": "Sincronización SNAP (Base EDLP)",
+    "habitual": "Mantenimiento EDLP y Producto Ancla",
+}
+
+
+def valores_por_defecto(vista: str, clusters: list[str]) -> dict:
+    gestor = vista == "gestor"
+    return {
+        "tienda": list(STORES),
+        "depto": list(DEPARTMENTS),
+        f"riesgo_{vista}": RISK_ORDER[:2] if gestor else list(RISK_ORDER),
+        "q": "",
+        f"estrategia_{vista}": [MARKDOWN, CROSS] if gestor else list(ESTRATEGIA_URL.values()),
+        "grupo": list(clusters),
+        "snap": False,
+        f"usd_{vista}": gestor,
+    }
+
+
+def _codigos(clave: str, clusters: list[str]) -> dict[str, str] | None:
+    """Relación código de URL -> valor para los filtros de selección múltiple."""
+    if clave == "tienda":
+        return {v: v for v in STORES}
+    if clave == "depto":
+        return {v: v for v in DEPARTMENTS}
+    if clave.startswith("riesgo"):
+        return {v.split()[-1].lower(): v for v in RISK_ORDER}
+    if clave.startswith("estrategia"):
+        return ESTRATEGIA_URL
+    if clave == "grupo":
+        return {str(i): v for i, v in enumerate(clusters)}
+    return None
+
+
+def _nombre_url(clave: str) -> str:
+    return clave.split("_")[0]
+
+
+def iniciar_filtros(vista: str, clusters: list[str]) -> None:
+    """Carga cada filtro desde la URL (primera vez) o su valor por defecto, y conserva lo elegido."""
+    cambio_de_vista = st.session_state.get("_vista_previa") not in (None, vista)
+    if cambio_de_vista:
+        # Estos filtros son propios de cada vista: la URL de la vista anterior no se aplica.
+        for nombre in ("riesgo", "estrategia", "usd"):
+            st.query_params.pop(nombre, None)
+    st.session_state["_vista_previa"] = vista
+    for clave, defecto in valores_por_defecto(vista, clusters).items():
+        if clave in st.session_state:
+            # Reasignar evita que Streamlit descarte el valor de un control que no se dibujó.
+            st.session_state[clave] = st.session_state[clave]
+            continue
+        valor = defecto
+        nombre = _nombre_url(clave)
+        if nombre in st.query_params:
+            codigos = _codigos(clave, clusters)
+            if codigos is not None:
+                crudos = st.query_params.get_all(nombre)
+                validos = [codigos[c] for c in crudos if c in codigos]
+                if validos or crudos == [VACIO]:
+                    valor = validos
+            elif isinstance(defecto, bool):
+                valor = st.query_params[nombre] == "1"
+            else:
+                valor = st.query_params[nombre]
+        st.session_state[clave] = valor
+
+
+def guardar_filtros_en_url(vista: str, clusters: list[str]) -> None:
+    """La URL refleja solo lo que difiere del valor por defecto, para poder compartirla."""
+    for clave, defecto in valores_por_defecto(vista, clusters).items():
+        nombre = _nombre_url(clave)
+        if clave not in st.session_state:
+            continue
+        valor = st.session_state[clave]
+        codigos = _codigos(clave, clusters)
+        igual = sorted(valor) == sorted(defecto) if codigos is not None else valor == defecto
+        if igual:
+            st.query_params.pop(nombre, None)
+        elif codigos is not None:
+            inverso = {v: c for c, v in codigos.items()}
+            st.query_params[nombre] = [inverso[v] for v in valor] or [VACIO]
+        elif isinstance(defecto, bool):
+            st.query_params[nombre] = "1" if valor else "0"
+        else:
+            st.query_params[nombre] = valor
+
+
+def restablecer_filtros(vista: str, clusters: list[str]) -> None:
+    for clave, defecto in valores_por_defecto(vista, clusters).items():
+        st.session_state[clave] = defecto
+        st.query_params.pop(_nombre_url(clave), None)
+
+
+def motivo_sin_resultados(mascaras: dict[str, pd.Series]) -> str:
+    """Indica qué filtro, al quitarse, devolvería resultados."""
+    culpables = []
+    for nombre in mascaras:
+        resto = [m for n, m in mascaras.items() if n != nombre]
+        if resto and np.logical_and.reduce(resto).any():
+            culpables.append(nombre)
+    if culpables:
+        return "Revisa: **" + "**, **".join(culpables) + "**. Al ampliar cualquiera de ellos vuelven los resultados."
+    return "Hay más de un filtro que deja la selección vacía. Usa **Restablecer filtros**."
+
+
+def _slot(tab, aviso: str | None = None):
+    """Dibuja el bloque solo si la vista activa tiene esa pestaña; si no hay datos, explica por qué."""
+    if tab is not None:
+        with tab:
+            if aviso:
+                st.warning(aviso)
+            else:
+                yield
+
+
+def grafico_riesgo_evidencia(df: pd.DataFrame, vista: str) -> None:
+    """G5: cuánto del riesgo tiene evidencia sobre la respuesta a rebajas."""
+    cs = df["primary_strategy"] == CROSS
+    hist = df["has_price_promo_history"]
+    grupos = [
+        ("Respondió a rebajas", df["primary_strategy"] == MARKDOWN, APPLE_BLUE),
+        ("Respuesta baja<br>o negativa", cs & hist, APPLE_ORANGE),
+        ("Sin historial<br>de rebajas", cs & ~hist, "#8E8E93"),
+        ("Riesgo bajo", df["risk_level"] == "Riesgo Bajo", APPLE_GREEN_BRIGHT),
+    ]
+    nombres = [g[0] for g in grupos]
+    montos = [float(df.loc[g[1], "revenue_at_risk_usd"].sum()) for g in grupos]
+    series = [int(g[1].sum()) for g in grupos]
+    total = sum(montos)
+    sin_hist_pct = montos[2] / total * 100.0 if total > 0 else 0.0
+    st.markdown('<div class="chart-question">¿Qué sabemos sobre el ingreso en riesgo?</div>', unsafe_allow_html=True)
+    st.markdown(
+        f'<div class="chart-takeaway">El <strong>{sin_hist_pct:.1f}%</strong> está en productos por tienda '
+        "sin historial suficiente de rebajas: no se sabe si responderían.</div>",
+        unsafe_allow_html=True,
+    )
+    fig = go.Figure(
+        go.Bar(
+            x=montos,
+            y=nombres,
+            orientation="h",
+            marker_color=[g[2] for g in grupos],
+            text=[f"${m:,.0f} · {n:,}" for m, n in zip(montos, series)],
+            textposition="outside",
+            cliponaxis=False,
+            hovertemplate="%{y}<br>$%{x:,.0f} en riesgo<extra></extra>",
+        )
+    )
+    apply_apple_plotly_theme(fig, height=370, margin=dict(l=125, r=95, t=20, b=45), show_legend=False)
+    fig.update_xaxes(title_text="USD en riesgo · productos por tienda", tickprefix="$", nticks=4, tickangle=0,
+                     range=[0, max(max(montos) * 1.55, 10.0)])
+    fig.update_yaxes(autorange="reversed", showgrid=False, automargin=False)
+    st.plotly_chart(fig, width="stretch", theme=None)
+
+
+def grafico_caidas_subidas(df: pd.DataFrame) -> None:
+    """G1: las caídas (riesgo) frente a las subidas pronosticadas."""
+    caidas = float(df["revenue_at_risk_usd"].sum())
+    delta = (df["pred_velocity_28d"] - df["sales_velocity_90d"]) * 28 * df["current_price"]
+    subidas = float(delta.clip(lower=0).sum())
+    neto = subidas - caidas
+    st.markdown('<div class="chart-question">¿Cae toda la venta o solo parte del catálogo?</div>', unsafe_allow_html=True)
+    st.markdown(
+        f'<div class="chart-takeaway">Frente al ritmo de los últimos 90 días: caídas por <strong>${caidas:,.0f}</strong>, '
+        f"subidas por <strong>${subidas:,.0f}</strong> y saldo de <strong>{usd_signo(neto)}</strong>. "
+        "El ingreso en riesgo suma solo las caídas. Aquí solo aplican tienda, departamento y búsqueda.</div>",
+        unsafe_allow_html=True,
+    )
+    fig = go.Figure(
+        go.Waterfall(
+            x=["Caídas", "Subidas", "Saldo"],
+            y=[-caidas, subidas, neto],
+            measure=["relative", "relative", "total"],
+            text=[usd_signo(-caidas), usd_signo(subidas), usd_signo(neto)],
+            textposition="outside",
+            decreasing=dict(marker=dict(color=APPLE_RED)),
+            increasing=dict(marker=dict(color=APPLE_GREEN_BRIGHT)),
+            totals=dict(marker=dict(color=APPLE_BLUE)),
+            cliponaxis=False,
+        )
+    )
+    apply_apple_plotly_theme(fig, height=340, margin=dict(t=30, b=40, l=70, r=24), show_legend=False)
+    alto = max(subidas - caidas, 0.0)
+    holgura = max(caidas, subidas, 1.0) * 0.25
+    fig.update_yaxes(title_text="USD en 28 días", tickprefix="$",
+                     range=[-caidas - holgura, alto + holgura])
+    st.plotly_chart(fig, width="stretch", theme=None)
+
+
+def grafico_tienda_departamento(df: pd.DataFrame) -> None:
+    """G4: ingreso en riesgo por tienda y departamento."""
+    tabla = df.pivot_table(index="dept_id", columns="store_id", values="revenue_at_risk_usd", aggfunc="sum", fill_value=0)
+    pila = tabla.stack()
+    depto, tienda = pila.idxmax()
+    st.markdown('<div class="chart-question">¿Qué departamento de qué tienda pesa más?</div>', unsafe_allow_html=True)
+    st.markdown(
+        f'<div class="chart-takeaway"><strong>{depto}</strong> en <strong>{tienda}</strong> suma ${pila.max():,.0f} en riesgo.</div>',
+        unsafe_allow_html=True,
+    )
+    fig = px.imshow(
+        tabla,
+        text_auto=",.0f",
+        aspect="auto",
+        color_continuous_scale=["#EFF6FF", APPLE_BLUE],
+        labels=dict(x="", y="", color="USD"),
+    )
+    apply_apple_plotly_theme(fig, height=340, margin=dict(t=20, b=40, l=80, r=20), show_legend=False)
+    fig.update_yaxes(showgrid=False)
+    st.plotly_chart(fig, width="stretch", theme=None)
+
+
+def grafico_series_por_riesgo(df: pd.DataFrame, vista: str) -> None:
+    """Distribución de series por estrategia y nivel de riesgo."""
+    datos = df.groupby(["strategy_short", "risk_level"], as_index=False).size()
+    mayor = datos.groupby("strategy_short")["size"].sum()
+    st.markdown('<div class="chart-question">¿Cuántos productos por tienda hay en cada acción?</div>', unsafe_allow_html=True)
+    st.markdown(
+        f'<div class="chart-takeaway">La acción con más casos es <strong>{mayor.idxmax()}</strong> ({mayor.max():,}).</div>',
+        unsafe_allow_html=True,
+    )
+    fig = px.bar(
+        datos,
+        x="size",
+        y="strategy_short",
+        color="risk_level",
+        orientation="h",
+        category_orders={"risk_level": RISK_ORDER},
+        color_discrete_map=RISK_COLORS,
+        labels={"size": "Productos por tienda", "strategy_short": "", "risk_level": ""},
+    )
+    apply_apple_plotly_theme(fig, height=340, margin=dict(t=20, b=80, l=150, r=20), legend_y=-0.24)
+    fig.update_yaxes(showgrid=False)
+    st.plotly_chart(fig, width="stretch", theme=None)
+
+
+def grafico_error_por_ventana(val_by_window: pd.DataFrame) -> None:
+    """A1: error de cada método en cada ventana de validación."""
+    metrica = st.radio("Métrica de error:", ["RMSE", "MAE", "RMSSE"], horizontal=True)
+    col = metrica.lower()
+    rf = val_by_window.loc[val_by_window["model"] == "Random Forest"].set_index("window")[col]
+    mejor = val_by_window.groupby("window")[col].min()
+    ganadas = int((rf <= mejor.reindex(rf.index)).sum())
+    st.markdown(
+        f'<div class="chart-takeaway">Random Forest tiene el menor {metrica} en <strong>{ganadas} de {len(rf)}</strong> '
+        "ventanas. Menor es mejor. El eje no empieza en cero para ver las diferencias.</div>",
+        unsafe_allow_html=True,
+    )
+    fig = px.line(
+        val_by_window,
+        x="window",
+        y=col,
+        color="model",
+        markers=True,
+        color_discrete_map={
+            "Random Forest": APPLE_BLUE,
+            "SES (NumPy)": APPLE_GREEN_BRIGHT,
+            "MA28": APPLE_ORANGE,
+            "Seasonal Naïve (lag_28)": "#8E8E93",
+        },
+        labels={"window": "Ventana de 28 días", col: metrica, "model": ""},
+    )
+    apply_apple_plotly_theme(fig, height=360, legend_y=-0.22)
+    fig.update_xaxes(dtick=1)
+    st.plotly_chart(fig, width="stretch", theme=None)
+
+
+def calcular_senal_caida(hist90: pd.DataFrame, w4: pd.DataFrame, umbral: float) -> pd.DataFrame:
+    """A2: ¿las caídas anunciadas en la ventana 4 ocurrieron? Compara tres periodos base."""
+    inicio = w4["date"].min()
+    previo = hist90.loc[hist90["date"] < inicio]
+    dias = previo["date"].nunique()
+    bases = {
+        f"{dias} días previos": previo,
+        "28 días previos": previo.loc[previo["date"] >= inicio - pd.Timedelta(days=28)],
+        f"Primeros {dias - 28} días": previo.loc[previo["date"] < inicio - pd.Timedelta(days=28)],
+    }
+    real = w4.groupby("id")["units_sold"].mean()
+    pred = {
+        "Random Forest": w4.groupby("id")["pred_rf"].mean(),
+        "SES": w4.groupby("id")["pred_ses"].mean(),
+        "MA28": w4.groupby("id")["pred_ma28"].mean(),
+    }
+    filas = []
+    for nombre_base, tramo in bases.items():
+        base = tramo.groupby("id")["units_sold"].mean()
+        base = base[base > 0]
+        cayo = (base - real.reindex(base.index)) / base >= umbral
+        for modelo, p in pred.items():
+            aviso = (base - p.reindex(base.index)) / base >= umbral
+            n_aviso, n_cayo = int(aviso.sum()), int(cayo.sum())
+            aciertos = int((aviso & cayo).sum())
+            filas.append(
+                {
+                    "Periodo base": nombre_base,
+                    "Método": modelo,
+                    "Avisos": n_aviso,
+                    "Acierto (%)": aciertos / n_aviso * 100.0 if n_aviso else np.nan,
+                    "Series que cayeron, referencia (%)": cayo.mean() * 100.0,
+                    "Caídas detectadas (%)": aciertos / n_cayo * 100.0 if n_cayo else np.nan,
+                }
+            )
+    return pd.DataFrame(filas)
+
+
+def grafico_senal_caida(hist90: pd.DataFrame, w4: pd.DataFrame) -> None:
+    umbral = st.select_slider("Caída mínima que se considera aviso:", options=[10, 20, 30], value=20, format_func=lambda v: f"{v}%")
+    res = calcular_senal_caida(hist90, w4, umbral / 100.0)
+    st.markdown(
+        '<div class="chart-takeaway">Compare cada barra con el rombo: es la proporción de series que cayó, '
+        "se avisara o no. <strong>El resultado cambia mucho según el periodo base</strong>; es una sola ventana y "
+        "no usa la regla de riesgo del tablero (90 días e intermitencia). Con la base de 28 días, MA28 no emite avisos "
+        "porque su pronóstico es esa misma base.</div>",
+        unsafe_allow_html=True,
+    )
+    fig = px.bar(
+        res,
+        x="Periodo base",
+        y="Acierto (%)",
+        color="Método",
+        barmode="group",
+        hover_data={"Avisos": True, "Caídas detectadas (%)": ":.1f"},
+        color_discrete_map={"Random Forest": APPLE_BLUE, "SES": APPLE_GREEN_BRIGHT, "MA28": APPLE_ORANGE},
+    )
+    ref = res.drop_duplicates("Periodo base")
+    fig.add_trace(
+        go.Scatter(
+            x=ref["Periodo base"],
+            y=ref["Series que cayeron, referencia (%)"],
+            mode="markers",
+            marker=dict(symbol="diamond", size=13, color=APPLE_INK),
+            name="Proporción que cayó (referencia)",
+        )
+    )
+    apply_apple_plotly_theme(fig, height=370, legend_y=-0.22)
+    fig.update_yaxes(range=[0, 100], title_text="Avisos que sí cayeron (%)")
+    st.plotly_chart(fig, width="stretch", theme=None)
+    st.dataframe(
+        res,
+        width="stretch",
+        hide_index=True,
+        column_config={c: st.column_config.NumberColumn(c, format="%.1f") for c in res.columns if "(%)" in c},
+    )
+
+
 def main() -> None:
     # -----------------------------------------------------------------------
     # Encabezado editorial estilo Apple (sin banner oscuro ni cajas de pasos)
@@ -837,7 +1306,7 @@ def main() -> None:
             <div class="apple-eyebrow">WALMART CALIFORNIA · INTELIGENCIA COMERCIAL</div>
             <h1 class="apple-title">Radar de Promociones e Ingresos en Riesgo</h1>
             <p class="apple-subtitle">
-                Anticipa qué alimentos perderán ventas en los próximos 28 días, cuánto dinero está en riesgo y qué promoción aplicar sin destruir margen.
+                Identifica qué alimentos venderían menos que en sus últimos 90 días según el pronóstico a 28 días, cuánto ingreso representa y qué acción conviene probar.
             </p>
         </div>
         """,
@@ -851,72 +1320,108 @@ def main() -> None:
     # -----------------------------------------------------------------------
     # Sidebar minimalista y amigable para marketing
     # -----------------------------------------------------------------------
+    claves = list(VISTAS)
+    if "vista" not in st.session_state:
+        inicial = st.query_params.get("vista", "gerente")
+        st.session_state["vista"] = inicial if inicial in claves else "gerente"
+    vista = st.sidebar.selectbox(
+        "Ver como",
+        options=claves,
+        format_func=lambda k: VISTAS[k]["nombre"],
+        key="vista",
+    )
+    st.query_params["vista"] = vista
+    es_gestor = vista == "gestor"
+
     st.sidebar.markdown("#### Filtrar catálogo")
 
-    sel_stores = st.sidebar.multiselect("Tiendas", options=STORES, default=STORES)
-    sel_depts = st.sidebar.multiselect("Departamentos", options=DEPARTMENTS, default=DEPARTMENTS)
-    sel_risks = st.sidebar.multiselect("Nivel de prioridad", options=RISK_ORDER, default=RISK_ORDER)
-    search_sku = st.sidebar.text_input("Buscar producto", value="", placeholder="Ej. FOODS_3_282 o CA_3")
-
     cluster_options = tables["kmeans_profiles"]["cluster_name"].tolist()
-    strategy_options = sorted(diag_df["primary_strategy"].unique().tolist())
+    iniciar_filtros(vista, cluster_options)
 
-    with st.sidebar.expander("Filtros avanzados", expanded=False):
-        sel_clusters = st.multiselect("Grupo comercial (Clúster)", options=cluster_options, default=cluster_options)
-        sel_strategies = st.multiselect("Estrategia recomendada", options=strategy_options, default=strategy_options)
-        only_snap_prio = st.toggle("Solo productos sensibles a pagos SNAP", value=False)
+    def con_total(columna: str, etiqueta=str):
+        totales = diag_df[columna].value_counts()
+        return lambda x: f"{etiqueta(x)} ({totales.get(x, 0):,})"
 
-    mask = (
-        diag_df["store_id"].isin(sel_stores)
-        & diag_df["dept_id"].isin(sel_depts)
-        & diag_df["risk_level"].isin(sel_risks)
-        & diag_df["cluster_name"].isin(sel_clusters)
-        & diag_df["primary_strategy"].isin(sel_strategies)
+    def estrategia_corta(x: str) -> str:
+        return tr(STRATEGY_SHORT_LABELS.get(x, x).split(" (")[0], vista)
+
+    sel_stores = st.sidebar.multiselect("Tiendas", options=STORES, format_func=con_total("store_id"), key="tienda")
+    sel_depts = st.sidebar.multiselect("Departamentos", options=DEPARTMENTS, format_func=con_total("dept_id"), key="depto")
+    sel_risks = st.sidebar.multiselect(
+        "Nivel de prioridad", options=RISK_ORDER, format_func=con_total("risk_level"), key=f"riesgo_{vista}"
     )
+    search_sku = st.sidebar.text_input("Buscar producto", placeholder="Ej. FOODS_3_282 o CA_3", key="q")
+    sel_strategies = st.sidebar.multiselect(
+        "Estrategia recomendada",
+        options=list(ESTRATEGIA_URL.values()),
+        format_func=con_total("primary_strategy", estrategia_corta),
+        key=f"estrategia_{vista}",
+    )
+    sel_clusters = st.sidebar.multiselect(
+        "Grupo comercial", options=cluster_options, format_func=con_total("cluster_name"), key="grupo"
+    )
+    only_snap_prio = st.sidebar.toggle("Solo sensibles a pagos SNAP", key="snap")
+    only_usd = es_gestor and st.sidebar.toggle("Solo con ingreso en riesgo mayor que $0", key=f"usd_{vista}")
+    st.sidebar.button(
+        "Restablecer filtros", on_click=restablecer_filtros, args=(vista, cluster_options), width="stretch"
+    )
+    st.sidebar.caption("Entre paréntesis: total de productos por tienda en todo el portafolio.")
+    guardar_filtros_en_url(vista, cluster_options)
+
+    mascaras = {
+        "Tiendas": diag_df["store_id"].isin(sel_stores),
+        "Departamentos": diag_df["dept_id"].isin(sel_depts),
+        "Nivel de prioridad": diag_df["risk_level"].isin(sel_risks),
+        "Estrategia recomendada": diag_df["primary_strategy"].isin(sel_strategies),
+        "Grupo comercial": diag_df["cluster_name"].isin(sel_clusters),
+    }
+    if only_usd:
+        mascaras["Solo con ingreso en riesgo"] = diag_df["revenue_at_risk_usd"] > 0
     if only_snap_prio:
-        mask &= diag_df["snap_priority"]
+        mascaras["Solo sensibles a SNAP"] = diag_df["snap_priority"]
     if search_sku.strip():
         q = search_sku.strip().lower()
-        mask &= (
+        mascaras["Buscar producto"] = (
             diag_df["id"].str.lower().str.contains(q, regex=False)
             | diag_df["item_id"].str.lower().str.contains(q, regex=False)
             | diag_df["display_name"].str.lower().str.contains(q, regex=False)
         )
+    mask = pd.Series(np.logical_and.reduce(list(mascaras.values())), index=diag_df.index)
 
     filtered_df = diag_df.loc[mask].copy()
+    # Alcance por tienda, departamento y búsqueda: base del gráfico de caídas y subidas.
+    alcance = diag_df["store_id"].isin(sel_stores) & diag_df["dept_id"].isin(sel_depts)
+    if search_sku.strip():
+        q = search_sku.strip().lower()
+        alcance &= diag_df["id"].str.lower().str.contains(q, regex=False) | diag_df["display_name"].str.lower().str.contains(q, regex=False)
+    alcance_df = diag_df.loc[alcance]
+    filtered_df["strategy_short"] = filtered_df["strategy_short"].map(lambda x: tr(x, vista))
 
     st.sidebar.markdown(
         f"""
         <div class="sidebar-counter">
-            Mostrando <strong>{len(filtered_df):,}</strong> de <strong>{len(diag_df):,}</strong> productos
+            Mostrando <strong>{len(filtered_df):,}</strong> de <strong>{len(diag_df):,}</strong> productos por tienda
             <br><span>({len(filtered_df) / len(diag_df) * 100:.1f}% del portafolio de alimentos CA)</span>
         </div>
         """,
         unsafe_allow_html=True,
     )
 
+    aviso_vacio = None
     if filtered_df.empty:
-        st.info(
-            "Ningún producto coincide con los filtros actuales. Ajusta las opciones en el panel izquierdo para volver a ver resultados."
-        )
-        st.stop()
+        aviso_vacio = "Ningún producto coincide con los filtros actuales. " + motivo_sin_resultados(mascaras)
 
     # -----------------------------------------------------------------------
-    # 4 Pestañas ordenadas de Negocio -> Producto -> Simulador -> Auditoría IA
+    # Pestañas según la vista activa
     # -----------------------------------------------------------------------
-    tab1, tab2, tab3, tab4 = st.tabs(
-        [
-            "1. Resumen Ejecutivo",
-            "2. Decisión por Producto",
-            "3. Simulador de Campañas",
-            "4. Respaldo IA (Auditoría Técnica)",
-        ]
-    )
+    pestanas = VISTAS[vista]["pestanas"]
+    slots = dict(zip([k for k, _ in pestanas], st.tabs([n for _, n in pestanas])))
+    tab1, tab2, tab3, tab4 = (slots.get(k) for k in ("resumen", "producto", "simulador", "auditoria"))
 
     # =======================================================================
     # TAB 1 — 1. RESUMEN EJECUTIVO (100% GERENCIAL)
     # =======================================================================
-    with tab1:
+    for _ in _slot(tab1, aviso_vacio):
         n_filt = len(filtered_df)
         total_rev = float(filtered_df["revenue_at_risk_usd"].sum())
         total_units = float(filtered_df["units_at_risk_28d"].sum())
@@ -926,10 +1431,14 @@ def main() -> None:
         pct_high = n_high / n_filt * 100.0
         rev_high = float(high_df["revenue_at_risk_usd"].sum())
 
-        c3_df = filtered_df.loc[filtered_df["cluster_id"] == 3]
-        c3_count = len(c3_df)
-        c3_rev = float(c3_df["revenue_at_risk_usd"].sum())
-        c3_share = (c3_rev / total_rev * 100.0) if total_rev > 0 else 0.0
+        por_grupo = filtered_df.groupby("cluster_name")["revenue_at_risk_usd"].sum()
+        if total_rev > 0:
+            grupo_top = str(por_grupo.idxmax())
+            grupo_valor = f"{por_grupo.max() / total_rev * 100.0:.1f}%"
+            grupo_series = int((filtered_df["cluster_name"] == grupo_top).sum())
+            grupo_texto = f"del riesgo visible en {grupo_series:,} productos por tienda del grupo «{grupo_top}»"
+        else:
+            grupo_valor, grupo_texto = "—", "No hay ingreso en riesgo en la selección"
 
         snap_df = filtered_df.loc[filtered_df["snap_priority"]]
         n_snap = len(snap_df)
@@ -941,76 +1450,128 @@ def main() -> None:
             f"""
             <div class="bento-grid-4">
                 <div class="kpi-card">
-                    <div class="kpi-label">Dinero en riesgo (próximos 28 días)</div>
+                    <div class="kpi-label">Ingreso en riesgo (frente a 90 días)</div>
                     <div class="kpi-value kpi-accent-red">${total_rev:,.0f}</div>
-                    <div class="kpi-sub">{total_units:,.0f} unidades en desaceleración proyectada</div>
+                    <div class="kpi-sub">{total_units:,.0f} unidades menos en los próximos 28 días</div>
                 </div>
                 <div class="kpi-card">
-                    <div class="kpi-label">Productos en alerta crítica</div>
+                    <div class="kpi-label">Productos por tienda en alerta crítica</div>
                     <div class="kpi-value">{n_high:,}</div>
                     <div class="kpi-sub">{pct_high:.1f}% del catálogo visible · ${rev_high:,.0f} en riesgo</div>
                 </div>
                 <div class="kpi-card">
-                    <div class="kpi-label">Foco Pareto (Grupo prioritario)</div>
-                    <div class="kpi-value kpi-accent-blue">{c3_share:.1f}%</div>
-                    <div class="kpi-sub">del riesgo concentrado en solo {c3_count:,} productos</div>
+                    <div class="kpi-label">Grupo con más riesgo</div>
+                    <div class="kpi-value kpi-accent-blue">{grupo_valor}</div>
+                    <div class="kpi-sub">{grupo_texto}</div>
                 </div>
                 <div class="kpi-card">
                     <div class="kpi-label">Impacto de días SNAP</div>
                     <div class="kpi-value kpi-accent-amber">{snap_rev_share:.1f}%</div>
-                    <div class="kpi-sub">${rev_snap:,.0f} en riesgo en {n_snap:,} productos sensibles</div>
+                    <div class="kpi-sub">${rev_snap:,.0f} en riesgo en {n_snap:,} productos por tienda</div>
                 </div>
             </div>
             """,
             unsafe_allow_html=True,
         )
 
+        medio_df = filtered_df.loc[filtered_df["risk_level"] == "Riesgo Medio"]
+        n_sin_ventas = int((filtered_df["aviso"] == AVISO_SIN_VENTAS).sum())
+        n_sin_monto = int((filtered_df["aviso"] == AVISO_SIN_MONTO).sum())
+        vs28 = float(filtered_df["riesgo_vs_28d_usd"].sum())
+        ya_caido = float(filtered_df.loc[filtered_df["caida_previa"], "revenue_at_risk_usd"].sum())
+        st.markdown(
+            f"""
+            <div class="bento-grid-4">
+                <div class="kpi-card">
+                    <div class="kpi-label">Productos por tienda en riesgo medio</div>
+                    <div class="kpi-value">{len(medio_df):,}</div>
+                    <div class="kpi-sub">{len(medio_df) / n_filt * 100:.1f}% de lo visible · ${medio_df["revenue_at_risk_usd"].sum():,.0f} en riesgo</div>
+                </div>
+                <div class="kpi-card">
+                    <div class="kpi-label">Sensibles a SNAP ({UMBRAL_SNAP_PCT}% o más)</div>
+                    <div class="kpi-value">{n_snap / n_filt * 100:.1f}%</div>
+                    <div class="kpi-sub">{n_snap:,} productos por tienda</div>
+                </div>
+                <div class="kpi-card">
+                    <div class="kpi-label">Casi sin ventas, en riesgo bajo</div>
+                    <div class="kpi-value kpi-accent-amber">{n_sin_ventas:,}</div>
+                    <div class="kpi-sub">Sin venta {INTERMITENCIA_CRITICA:.0f}% de los días o más: revisar surtido</div>
+                </div>
+                <div class="kpi-card">
+                    <div class="kpi-label">Alertas sin monto</div>
+                    <div class="kpi-value">{n_sin_monto:,}</div>
+                    <div class="kpi-sub">Riesgo alto o medio por rotación, con $0 en riesgo</div>
+                </div>
+            </div>
+            <div class="footnote-box" style="margin:0 0 1.1rem 0;">
+                <strong>Cómo leer el ingreso en riesgo:</strong> compara el pronóstico con los últimos 90 días.
+                De ${total_rev:,.0f}, <strong>${ya_caido:,.0f}</strong> corresponde a caídas ya ocurridas (el pronóstico no baja
+                frente a los últimos 28 días). Medida contra esos 28 días, la caída sería de <strong>${vs28:,.0f}</strong>.
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
         # Bloque: 3 Decisiones Inmediatas para Marketing
-        md_sub = filtered_df.loc[filtered_df["primary_strategy"] == "Precios Dinámicos / Markdown (20%–35%)"]
-        cs_sub = filtered_df.loc[filtered_df["primary_strategy"] == "Cross-Selling y Visibilidad Omnicanal (Sin Descuento)"]
+        md_sub = filtered_df.loc[filtered_df["primary_strategy"] == MARKDOWN]
+        cs_sub = filtered_df.loc[filtered_df["primary_strategy"] == CROSS]
 
         md_count = len(md_sub)
         md_rev_risk = float(md_sub["revenue_at_risk_usd"].sum())
-        # Recuperación estimada al 25% de descuento en escenario esperado (ε=0.6)
-        sim_lift_25 = (1.0 - 0.25) ** (-0.6) - 1.0
-        md_est_rec = float((md_sub["pred_total_28d_units"] * sim_lift_25 * md_sub["current_price"] * 0.75).sum())
+        # Escenario supuesto: 25% de descuento y respuesta 0.6
+        esc25 = escenario_descuento(md_sub, DESCUENTO_BASE / 100.0, ELASTICIDADES["Esperado"])
 
         cs_count = len(cs_sub)
         cs_rev_risk = float(cs_sub["revenue_at_risk_usd"].sum())
+        cs_sin = int((~cs_sub["has_price_promo_history"]).sum())
+        cs_baja = cs_count - cs_sin
 
-        st.markdown('<div class="section-heading">3 Decisiones Inmediatas para Marketing</div>', unsafe_allow_html=True)
+        sin_productos = "No hay productos de este grupo con los filtros actuales."
+        texto_rebaja = (
+            f"Con {DESCUENTO_BASE}% de descuento y una respuesta supuesta, el ingreso de 28 días pasaría de "
+            f'<strong>${esc25["base"]:,.0f}</strong> a <strong>${esc25["con_rebaja"]:,.0f}</strong> '
+            f'({usd_signo(esc25["neto"])}). No incluye costos ni merma evitada.'
+        ) if md_count else sin_productos
+        texto_combo = (
+            f"<strong>{cs_sin:,}</strong> no tienen historial suficiente de rebajas y "
+            f"<strong>{cs_baja:,}</strong> mostraron respuesta baja o negativa. "
+            "El efecto del combo no está probado con estos datos."
+        ) if cs_count else sin_productos
+        texto_snap = (
+            "<strong>Días 1–10 (pagos SNAP):</strong> reforzar exhibición, multipacks y stock.<br>"
+            "<strong>Días 20–31 (fuera de SNAP):</strong> plan de cupones de fin de mes."
+        ) if n_snap else sin_productos
+
+        st.markdown('<div class="section-heading">3 Decisiones para Marketing</div>', unsafe_allow_html=True)
         st.markdown(
-            f"""
+            tr(f"""
             <div class="bento-grid-3">
                 <div class="decision-card decision-top-blue">
-                    <div class="decision-kicker" style="color:{APPLE_BLUE};">Decisión 1 · Descuentos Inteligentes</div>
-                    <div class="decision-title">Aplicar rebaja del 20%–35% solo en productos que reaccionan al precio</div>
-                    <div class="decision-metric">{md_count:,} productos · ${md_rev_risk:,.0f} en riesgo</div>
+                    <div class="decision-kicker" style="color:{APPLE_BLUE};">Decisión 1 · Rebajas a prueba</div>
+                    <div class="decision-title">Probar la rebaja antes de extenderla: vende más, pero ingresa menos</div>
+                    <div class="decision-metric">{md_count:,} productos por tienda · ${md_rev_risk:,.0f} en riesgo</div>
                     <div class="decision-body">
-                        Con un descuento táctico del 25% se proyecta recuperar <strong>${md_est_rec:,.0f}</strong> en ventas incrementales.
-                        Activar rotación FEFO y bajar la reposición posterior en <strong>-20% a -30%</strong>.
+                        {texto_rebaja}
                     </div>
                 </div>
                 <div class="decision-card decision-top-amber">
                     <div class="decision-kicker" style="color:{APPLE_AMBER};">Decisión 2 · Combos sin rebajar precio</div>
-                    <div class="decision-title">Armar paquetes Cross-Selling junto a productos ancla de alta rotación</div>
-                    <div class="decision-metric">{cs_count:,} productos · ${cs_rev_risk:,.0f} en riesgo</div>
+                    <div class="decision-title">Probar combos con un producto de alta rotación</div>
+                    <div class="decision-metric">{cs_count:,} productos por tienda · ${cs_rev_risk:,.0f} en riesgo</div>
                     <div class="decision-body">
-                        Estos artículos no responden a rebajas directas. Empaquetarlos con líderes de su misma tienda
-                        y pasillo protege el margen bruto mientras acelera su salida de góndola.
+                        {texto_combo}
                     </div>
                 </div>
                 <div class="decision-card decision-top-green">
                     <div class="decision-kicker" style="color:{APPLE_GREEN};">Decisión 3 · Calendario SNAP</div>
-                    <div class="decision-title">Sincronizar stock y cupones con el ciclo mensual de pagos SNAP</div>
-                    <div class="decision-metric">{n_snap:,} productos · ${rev_snap:,.0f} en riesgo</div>
+                    <div class="decision-title">Sincronizar stock y cupones con el ciclo mensual</div>
+                    <div class="decision-metric">{n_snap:,} productos por tienda · ${rev_snap:,.0f} en riesgo</div>
                     <div class="decision-body">
-                        <strong>Días 1–10:</strong> reforzar exhibición, multipacks y stock en picos de pago.<br>
-                        <strong>Días 20–31:</strong> activar cupones de fin de mes en productos en desaceleración.
+                        {texto_snap}
                     </div>
                 </div>
             </div>
-            """,
+            """, vista),
             unsafe_allow_html=True,
         )
 
@@ -1030,7 +1591,7 @@ def main() -> None:
 
                 st.markdown('<div class="chart-question">¿En qué tienda actuar primero?</div>', unsafe_allow_html=True)
                 st.markdown(
-                    f'<div class="chart-takeaway"><strong>{top_st}</strong> concentra el {top_st_pct:.1f}% del dinero en riesgo (${top_st_val:,.0f}), liderando la prioridad de campaña.</div>',
+                    f'<div class="chart-takeaway"><strong>{top_st}</strong> concentra el {top_st_pct:.1f}% del ingreso en riesgo (${top_st_val:,.0f}), liderando la prioridad de campaña.</div>',
                     unsafe_allow_html=True,
                 )
 
@@ -1083,64 +1644,18 @@ def main() -> None:
 
         with col_r:
             with st.container(border=True):
-                strat_agg = (
-                    filtered_df.groupby(["primary_strategy", "strategy_short"], as_index=False)
-                    .agg(
-                        revenue_at_risk_usd=("revenue_at_risk_usd", "sum"),
-                        sku_count=("id", "count"),
-                    )
-                    .sort_values("revenue_at_risk_usd", ascending=True)
-                )
-                strat_agg["axis_label"] = strat_agg["primary_strategy"].map(STRATEGY_AXIS_LABELS).fillna(strat_agg["strategy_short"])
-                strat_agg["share_pct"] = (
-                    strat_agg["revenue_at_risk_usd"] / total_rev * 100.0 if total_rev > 0 else 0.0
-                )
-                strat_agg["label_txt"] = strat_agg.apply(
-                    lambda r: f"${r['revenue_at_risk_usd']:,.0f} · {r['share_pct']:.1f}%",
-                    axis=1,
-                )
-                lead_row = strat_agg.iloc[-1]
+                grafico_riesgo_evidencia(filtered_df, vista)
 
-                st.markdown('<div class="chart-question">¿Qué estrategia protege más ingresos?</div>', unsafe_allow_html=True)
-                st.markdown(
-                    f'<div class="chart-takeaway"><strong>{lead_row["strategy_short"]}</strong> cubre el {lead_row["share_pct"]:.1f}% del riesgo ({int(lead_row["sku_count"]):,} productos).</div>',
-                    unsafe_allow_html=True,
-                )
+        extra_l, extra_r = st.columns(2, gap="medium")
+        with extra_l:
+            with st.container(border=True):
+                grafico_tienda_departamento(filtered_df)
+        with extra_r:
+            with st.container(border=True):
+                grafico_series_por_riesgo(filtered_df, vista)
 
-                fig_strat = px.bar(
-                    strat_agg,
-                    x="revenue_at_risk_usd",
-                    y="axis_label",
-                    orientation="h",
-                    color="axis_label",
-                    color_discrete_map=STRATEGY_AXIS_COLORS,
-                    text="label_txt",
-                    custom_data=["strategy_short", "sku_count", "share_pct"],
-                    labels={"revenue_at_risk_usd": "Ingreso en riesgo (USD)", "axis_label": ""},
-                )
-                fig_strat.update_traces(
-                    textposition="outside",
-                    cliponaxis=False,
-                    textfont=dict(size=11, color=APPLE_INK),
-                    marker_line_width=0,
-                    hovertemplate="<b>%{customdata[0]}</b><br>En riesgo: $%{x:,.0f} USD (%{customdata[2]:.1f}%)<br>Productos: %{customdata[1]:,}<extra></extra>",
-                )
-                max_strat = float(strat_agg["revenue_at_risk_usd"].max()) if len(strat_agg) else 1.0
-                apply_apple_plotly_theme(
-                    fig_strat,
-                    height=370,
-                    margin=dict(l=135, r=105, t=20, b=45),
-                    show_legend=False,
-                )
-                fig_strat.update_xaxes(
-                    showgrid=True,
-                    gridcolor=APPLE_GRID,
-                    tickprefix="$",
-                    tickangle=0,
-                    range=[0, max(max_strat * 1.38, 10.0)],
-                )
-                fig_strat.update_yaxes(showgrid=False, automargin=False)
-                st.plotly_chart(fig_strat, width="stretch", theme=None)
+        with st.container(border=True):
+            grafico_caidas_subidas(alcance_df)
 
         st.markdown(
             """
@@ -1156,7 +1671,7 @@ def main() -> None:
     # =======================================================================
     # TAB 2 — 2. DECISIÓN POR PRODUCTO (RADIOGRAFÍA ACCIONABLE)
     # =======================================================================
-    with tab2:
+    for _ in _slot(tab2, aviso_vacio):
         hist90_df = load_history_90d()
         val_w4_df, forecast_df = load_predictions()
 
@@ -1167,16 +1682,31 @@ def main() -> None:
             for r in sorted_for_select.itertuples(index=False)
         }
 
+        # Conserva la serie elegida; si los filtros la excluyen, avisa.
+        recordada = st.session_state.get("serie_memoria")
+        if recordada in sku_labels:
+            st.session_state["serie_sel"] = recordada
+        else:
+            if recordada is not None:
+                st.info(
+                    f"La serie que veías ({clean_sku_code(recordada)}) quedó fuera de los filtros. "
+                    "Ahora se muestra la de mayor ingreso en riesgo."
+                )
+            st.session_state["serie_sel"] = sku_ids_ordered[0]
+
         sel_c1, sel_c2 = st.columns([3.3, 1.0])
         with sel_c1:
             selected_id = st.selectbox(
-                "Elegir producto (ordenado de mayor a menor dinero en riesgo):",
+                "Elegir producto y tienda (de mayor a menor ingreso en riesgo):",
                 options=sku_ids_ordered,
                 format_func=lambda x: sku_labels[x],
+                key="serie_sel",
+                on_change=lambda: st.session_state.update(serie_memoria=st.session_state["serie_sel"]),
             )
+        st.session_state["serie_memoria"] = selected_id
         with sel_c2:
             st.write("")
-            show_baselines = st.checkbox("Mostrar referencias (SES / MA28)", value=False)
+            show_baselines = vista == "analista" and st.checkbox("Ver referencias", value=False, help="Suavizado exponencial (SES) y media de 28 días (MA28)")
 
         sku_row = filtered_df.loc[filtered_df["id"] == selected_id].iloc[0]
         h_sub = hist90_df.loc[hist90_df["id"] == selected_id]
@@ -1194,7 +1724,7 @@ def main() -> None:
         if "Markdown" in strat_raw:
             decision_headline = (
                 f"Estrategia recomendada: Aplicar Markdown {sku_row['discount_range']} "
-                "+ reducir pedido post-oferta en 20%–30%"
+                f"+ revisar pedido post-oferta ({AJUSTE_REPOSICION}, supuesto)"
             )
             decision_sub = (
                 "Este artículo responde positivamente a rebajas. Activar rotación FEFO en góndola "
@@ -1206,9 +1736,14 @@ def main() -> None:
                 f"Estrategia recomendada: Cross-Selling sin descuento — "
                 f"Empaquetar junto al producto ancla {anchor}"
             )
+            motivo = (
+                "Su respuesta observada a rebajas fue baja o negativa."
+                if bool(sku_row["has_price_promo_history"])
+                else "No hay historial suficiente para saber si responde a rebajas."
+            )
             decision_sub = (
-                f"No conviene rebajar precio (sin respuesta favorable a descuentos). "
-                f"Exhibir en combo o cabecera junto a {anchor}, líder de rotación en {sku_row['store_id']} ({sku_row['dept_id']})."
+                f"{motivo} Probar combo o cabecera junto a {anchor}, líder de rotación en "
+                f"{sku_row['store_id']} ({sku_row['dept_id']})."
             )
         elif "SNAP" in strat_raw:
             decision_headline = (
@@ -1226,19 +1761,30 @@ def main() -> None:
                 "Producto estable sin urgencia promocional. Ideal para traccionar combos junto a artículos en desaceleración."
             )
 
+        if sku_row["aviso"] == AVISO_SIN_VENTAS:
+            decision_headline = "Revisar surtido y disponibilidad: casi no registra ventas"
+            decision_sub = (
+                f"No vendió en el {sku_row['intermittency_pct']:.1f}% de los días. La regla documentada lo clasifica en "
+                "riesgo bajo, pero no debe tratarse como estable ni usarse como ancla. Verificar stock antes de decidir."
+            )
+
         pills_html = risk_pill_html(sku_row["risk_level"])
+        if sku_row["aviso"]:
+            pills_html += f'<span class="pill pill-med">{sku_row["aviso"]}</span>'
+        if bool(sku_row["caida_previa"]):
+            pills_html += '<span class="pill pill-info">La caída ya ocurrió en los últimos 28 días</span>'
         if sku_row["snap_priority"]:
-            pills_html += '<span class="pill pill-snap">Prioridad SNAP (+15% o más)</span>'
+            pills_html += f'<span class="pill pill-snap">Prioridad SNAP (+{UMBRAL_SNAP_PCT}% o más)</span>'
         if sku_row["stockpiling_alert"]:
-            pills_html += '<span class="pill pill-info">Alerta post-oferta: -20% a -30% pedido</span>'
+            pills_html += f'<span class="pill pill-info">Revisar pedido post-oferta: {AJUSTE_REPOSICION}</span>'
         pills_html += f'<span class="pill pill-info">{sku_row["cluster_name"]}</span>'
 
         st.markdown(
             f"""
             <div class="semaphore-card {sem_cls}">
                 <div>{pills_html}</div>
-                <div class="sem-headline">{decision_headline}</div>
-                <p class="sem-detail">{decision_sub} <strong>Calendario SNAP:</strong> {sku_row['snap_tactical_plan']}.</p>
+                <div class="sem-headline">{tr(decision_headline, vista)}</div>
+                <p class="sem-detail">{tr(decision_sub, vista)} <strong>Calendario:</strong> {tr(sku_row['snap_tactical_plan'], vista)}.</p>
             </div>
             """,
             unsafe_allow_html=True,
@@ -1282,9 +1828,9 @@ def main() -> None:
                     <div class="kpi-sub">{decline_txt}</div>
                 </div>
                 <div class="kpi-card">
-                    <div class="kpi-label">Dinero en riesgo (28d)</div>
+                    <div class="kpi-label">Ingreso en riesgo (vs. 90d)</div>
                     <div class="kpi-value-sm kpi-accent-red">${sku_row['revenue_at_risk_usd']:,.2f}</div>
-                    <div class="kpi-sub">Precio actual: ${sku_row['current_price']:.2f}</div>
+                    <div class="kpi-sub">Vs. 28d: ${sku_row['riesgo_vs_28d_usd']:,.2f} · Precio ${sku_row['current_price']:.2f}</div>
                 </div>
                 <div class="kpi-card">
                     <div class="kpi-label">Días sin ventas (3 años)</div>
@@ -1309,169 +1855,183 @@ def main() -> None:
     # =======================================================================
     # TAB 3 — 3. SIMULADOR DE CAMPAÑAS (SUBIDA A POSICIÓN 3)
     # =======================================================================
-    with tab3:
-        st.markdown('<div class="section-heading">Simulador de Descuentos Inteligentes (20%–35%)</div>', unsafe_allow_html=True)
+    for _ in _slot(tab3, aviso_vacio):
+        st.markdown('<div class="section-heading">Simulador de Descuentos</div>', unsafe_allow_html=True)
         st.caption(
-            "Simula el impacto de una rebaja únicamente sobre los productos en riesgo que demostraron responder positivamente a promociones (escenarios basados en Riesenegger y Hübner, 2026)."
+            "Escenarios supuestos, no medidos en estos datos. Calcula ingreso, no ganancia: no hay costos ni merma. "
+            "Solo incluye productos por tienda en riesgo que respondieron a rebajas en el pasado."
         )
 
-        markdown_df = filtered_df.loc[
-            filtered_df["primary_strategy"] == "Precios Dinámicos / Markdown (20%–35%)"
-        ].copy()
+        markdown_df = filtered_df.loc[filtered_df["primary_strategy"] == MARKDOWN].copy()
 
         if markdown_df.empty:
-            st.info(
-                "Los filtros actuales no incluyen productos elegibles para descuentos inteligentes. "
-                "Abre 'Filtros avanzados' en el panel izquierdo para incluir esa estrategia."
-            )
+            if MARKDOWN not in sel_strategies:
+                causa = f"Agrega «{estrategia_corta(MARKDOWN)}» en el filtro de estrategia."
+            elif not {"Riesgo Alto", "Riesgo Medio"} & set(sel_risks):
+                causa = "Las rebajas solo aplican a riesgo alto o medio: agrega uno en «Nivel de prioridad»."
+            else:
+                causa = "Ningún producto de la selección respondió a rebajas en el pasado."
+            st.info(f"No hay productos para simular. {causa}")
         else:
             with st.container(border=True):
                 sc1, sc2 = st.columns([1.25, 1.35])
                 with sc1:
                     disc_pct = st.slider(
                         "Nivel de descuento a simular:",
-                        min_value=20,
-                        max_value=35,
-                        value=25,
+                        min_value=DESCUENTO_MIN,
+                        max_value=DESCUENTO_MAX,
+                        value=DESCUENTO_BASE,
                         step=1,
                         format="%d%%",
                     )
+                eps_map = {**ELASTICIDADES, ESCENARIO_HISTORIAL: None}
                 with sc2:
                     elast_label = st.radio(
-                        "Escenario de respuesta del consumidor:",
-                        options=[
-                            "Conservador (ε=0.4)",
-                            "Esperado (ε=0.6)",
-                            "Optimista (ε=0.8)",
-                        ],
+                        "Respuesta supuesta del consumidor:",
+                        options=list(eps_map),
                         index=1,
                         horizontal=True,
+                        format_func=lambda k: f"{k} (ε={eps_map[k]})" if vista == "analista" and eps_map[k] else k,
+                    )
+                if eps_map[elast_label] is None:
+                    st.caption(
+                        "Usa la venta observada con rebajas de cada producto, limitada al escenario optimista. Mezcla "
+                        "cualquier rebaja mayor de 5% y no prueba causa."
                     )
 
-            eps_map = {
-                "Conservador (ε=0.4)": 0.4,
-                "Esperado (ε=0.6)": 0.6,
-                "Optimista (ε=0.8)": 0.8,
-            }
             eps = eps_map[elast_label]
             d = disc_pct / 100.0
-            demand_lift = (1.0 - d) ** (-eps) - 1.0
+            esc = escenario_descuento(markdown_df, d, eps)
 
-            base_units_28d = float(markdown_df["pred_total_28d_units"].sum())
-            extra_units_28d = base_units_28d * demand_lift
-            promo_unit_prices = markdown_df["current_price"] * (1.0 - d)
-            recovered_rev_usd = float((markdown_df["pred_total_28d_units"] * demand_lift * promo_unit_prices).sum())
-            eligible_risk_usd = float(markdown_df["revenue_at_risk_usd"].sum())
-            coverage_pct = (recovered_rev_usd / eligible_risk_usd * 100.0) if eligible_risk_usd > 0 else 0.0
-
-            # 5 Tarjetas HTML Bento (elimina definitivamente el recorte '-20% a -3...')
             st.markdown(
                 f"""
                 <div class="bento-grid-5">
                     <div class="kpi-card">
-                        <div class="kpi-label">Productos aptos para rebaja</div>
-                        <div class="kpi-value-sm">{len(markdown_df):,}</div>
-                        <div class="kpi-sub">${eligible_risk_usd:,.0f} en riesgo elegible</div>
+                        <div class="kpi-label">Ingreso sin rebaja (28 días)</div>
+                        <div class="kpi-value-sm">${esc["base"]:,.0f}</div>
+                        <div class="kpi-sub">{len(markdown_df):,} productos por tienda</div>
                     </div>
                     <div class="kpi-card">
-                        <div class="kpi-label">Aumento de demanda</div>
-                        <div class="kpi-value-sm kpi-accent-blue">+{demand_lift * 100:.2f}%</div>
-                        <div class="kpi-sub">Descuento {disc_pct}% · {elast_label}</div>
+                        <div class="kpi-label">Ingreso con rebaja</div>
+                        <div class="kpi-value-sm kpi-accent-blue">${esc["con_rebaja"]:,.0f}</div>
+                        <div class="kpi-sub">Descuento {disc_pct}%</div>
                     </div>
                     <div class="kpi-card">
-                        <div class="kpi-label">Unidades extra (28 días)</div>
-                        <div class="kpi-value-sm">+{extra_units_28d:,.0f}</div>
-                        <div class="kpi-sub">Sobre {base_units_28d:,.0f} unidades base</div>
+                        <div class="kpi-label">Diferencia neta</div>
+                        <div class="kpi-value-sm {'kpi-accent-red' if esc['neto'] < 0 else 'kpi-accent-green'}">{usd_signo(esc["neto"])}</div>
+                        <div class="kpi-sub">{esc["neto"] / esc["base"] * 100 if esc["base"] else 0:+.1f}% sobre el ingreso base</div>
                     </div>
                     <div class="kpi-card">
-                        <div class="kpi-label">Ingreso recuperado</div>
-                        <div class="kpi-value-sm kpi-accent-green">${recovered_rev_usd:,.2f}</div>
-                        <div class="kpi-sub">{coverage_pct:.1f}% del riesgo elegible</div>
+                        <div class="kpi-label">Más unidades supuestas</div>
+                        <div class="kpi-value-sm">+{esc["lift"] * 100:.1f}%</div>
+                        <div class="kpi-sub">+{esc["unidades_extra"]:,.0f} sobre {esc["unidades_base"]:,.0f}</div>
                     </div>
                     <div class="kpi-card">
-                        <div class="kpi-label">Ajuste de reposición</div>
-                        <div class="kpi-value-sm kpi-accent-amber">-20% a -30%</div>
-                        <div class="kpi-sub">Post-oferta (evitar sobrestock)</div>
+                        <div class="kpi-label">Necesario para no perder ingreso</div>
+                        <div class="kpi-value-sm kpi-accent-amber">+{esc["lift_equilibrio"] * 100:.1f}%</div>
+                        <div class="kpi-sub">unidades adicionales</div>
                     </div>
                 </div>
                 """,
                 unsafe_allow_html=True,
             )
 
-            with st.container(border=True):
-                st.markdown(
-                    '<div class="chart-question">¿Cómo cambia el ingreso recuperado según el porcentaje de descuento?</div>',
-                    unsafe_allow_html=True,
-                )
-                st.markdown(
-                    f'<div class="chart-takeaway">Regla operativa: al aplicar <strong>{disc_pct}%</strong> de rebaja en {len(markdown_df):,} productos, activar rotación FEFO y bajar la orden posterior en <strong>-20% a -30%</strong>.</div>',
-                    unsafe_allow_html=True,
-                )
-
-                d_grid = np.arange(20, 36) / 100.0
-                sim_rows = []
-                for label_e, e_val in eps_map.items():
-                    for dv in d_grid:
-                        lift_v = (1.0 - dv) ** (-e_val) - 1.0
-                        rec_v = float((markdown_df["pred_total_28d_units"] * lift_v * markdown_df["current_price"] * (1.0 - dv)).sum())
-                        sim_rows.append(
-                            {
-                                "Descuento (%)": int(round(dv * 100)),
-                                "Escenario": label_e,
-                                "Incremento Demanda (%)": lift_v * 100.0,
-                                "Ingreso Recuperado (USD)": rec_v,
-                            }
+            sim_l, sim_r = st.columns(2, gap="medium")
+            with sim_l:
+                with st.container(border=True):
+                    st.markdown('<div class="chart-question">¿Qué pasa con el ingreso al rebajar?</div>', unsafe_allow_html=True)
+                    st.markdown(
+                        f'<div class="chart-takeaway">Lo que se vende de más ({usd_signo(esc["extra"])}) '
+                        f'{"no compensa" if esc["neto"] < 0 else "compensa"} la rebaja sobre lo que ya se vendía ({usd_signo(esc["rebaja"])}).</div>',
+                        unsafe_allow_html=True,
+                    )
+                    fig_casc = go.Figure(
+                        go.Waterfall(
+                            x=["Sin rebaja", "Rebaja", "Unidades extra", "Con rebaja"],
+                            y=[esc["base"], esc["rebaja"], esc["extra"], esc["con_rebaja"]],
+                            measure=["absolute", "relative", "relative", "total"],
+                            text=[f"${esc['base']:,.0f}", usd_signo(esc["rebaja"]), usd_signo(esc["extra"]), f"${esc['con_rebaja']:,.0f}"],
+                            textposition="outside",
+                            decreasing=dict(marker=dict(color=APPLE_RED)),
+                            increasing=dict(marker=dict(color=APPLE_GREEN_BRIGHT)),
+                            totals=dict(marker=dict(color=APPLE_BLUE)),
+                            cliponaxis=False,
                         )
-                sim_curve_df = pd.DataFrame(sim_rows)
-                fig_sim = px.line(
-                    sim_curve_df,
-                    x="Descuento (%)",
-                    y="Ingreso Recuperado (USD)",
-                    color="Escenario",
-                    markers=True,
-                    color_discrete_map={
-                        "Conservador (ε=0.4)": "#8E8E93",
-                        "Esperado (ε=0.6)": APPLE_BLUE,
-                        "Optimista (ε=0.8)": APPLE_GREEN_BRIGHT,
-                    },
-                    hover_data={"Incremento Demanda (%)": ":.2f"},
+                    )
+                    apply_apple_plotly_theme(fig_casc, height=360, margin=dict(t=30, b=40, l=70, r=24), show_legend=False)
+                    fig_casc.update_yaxes(tickprefix="$", range=[0, esc["base"] * 1.18])
+                    st.plotly_chart(fig_casc, width="stretch", theme=None)
+
+            with sim_r:
+                with st.container(border=True):
+                    st.markdown('<div class="chart-question">¿Cuánto cambia el ingreso según el descuento?</div>', unsafe_allow_html=True)
+                    st.markdown(
+                        '<div class="chart-takeaway">Diferencia frente a no rebajar. Bajo la línea cero se ingresa menos.</div>',
+                        unsafe_allow_html=True,
+                    )
+                    sim_curve_df = pd.DataFrame(
+                        [
+                            {
+                                "Descuento (%)": dv,
+                                "Escenario": label_e,
+                                "Diferencia neta (USD)": escenario_descuento(markdown_df, dv / 100.0, e_val)["neto"],
+                            }
+                            for label_e, e_val in eps_map.items()
+                            for dv in range(DESCUENTO_MIN, DESCUENTO_MAX + 1)
+                        ]
+                    )
+                    fig_sim = px.line(
+                        sim_curve_df,
+                        x="Descuento (%)",
+                        y="Diferencia neta (USD)",
+                        color="Escenario",
+                        markers=True,
+                        color_discrete_map={"Conservador": "#8E8E93", "Esperado": APPLE_BLUE, "Optimista": APPLE_GREEN_BRIGHT, ESCENARIO_HISTORIAL: APPLE_ORANGE},
+                    )
+                    fig_sim.add_hline(y=0, line=dict(color=APPLE_INK, width=1.2))
+                    fig_sim.add_vline(x=disc_pct, line=dict(color=APPLE_RED, width=1.4, dash="dash"))
+                    apply_apple_plotly_theme(fig_sim, height=360, margin=dict(t=30, b=78, l=70, r=24), legend_y=-0.22)
+                    fig_sim.update_yaxes(tickprefix="$", rangemode="tozero")
+                    st.plotly_chart(fig_sim, width="stretch", theme=None)
+
+            with st.container(border=True):
+                req = esc["lift_equilibrio"] * 100.0
+                puntos = markdown_df.loc[markdown_df["revenue_at_risk_usd"] > 0].copy()
+                puntos["resp_pct"] = puntos["price_sensitivity"] * 100.0
+                st.markdown('<div class="chart-question">¿Qué respuesta pasada tuvo cada producto frente al equilibrio?</div>', unsafe_allow_html=True)
+                st.markdown(
+                    f'<div class="chart-takeaway">La línea marca el +{req:.1f}% necesario con {disc_pct}% de descuento. '
+                    "<strong>Estar encima no garantiza ganancia:</strong> la respuesta pasada mezcla cualquier rebaja "
+                    "mayor de 5% en 3 años y puede deberse a otras causas. Solo se muestran productos por tienda con ingreso en riesgo.</div>",
+                    unsafe_allow_html=True,
                 )
-                fig_sim.add_shape(
-                    type="line",
-                    xref="x",
-                    yref="paper",
-                    x0=disc_pct,
-                    x1=disc_pct,
-                    y0=0.0,
-                    y1=1.0,
-                    line=dict(color=APPLE_RED, width=1.6, dash="dash"),
-                )
-                fig_sim.add_annotation(
-                    x=disc_pct,
-                    y=1.06,
-                    xref="x",
-                    yref="paper",
-                    text=f"Descuento actual: {disc_pct}%",
-                    showarrow=False,
-                    font=dict(size=11, color=APPLE_RED),
-                    bgcolor="#FFF2F2",
-                    bordercolor="#FECACA",
-                    borderwidth=1,
-                    borderpad=3,
-                )
-                apply_apple_plotly_theme(
-                    fig_sim,
-                    height=330,
-                    margin=dict(t=42, b=78, l=60, r=24),
-                    legend_bottom=True,
-                    legend_y=-0.22,
-                )
-                fig_sim.update_yaxes(tickprefix="$")
-                st.plotly_chart(fig_sim, width="stretch", theme=None)
+                if puntos.empty:
+                    st.info("No hay productos aptos con ingreso en riesgo.")
+                else:
+                    fig_eq = px.scatter(
+                        puntos,
+                        x="revenue_at_risk_usd",
+                        y="resp_pct",
+                        hover_name="display_name",
+                        hover_data={"revenue_at_risk_usd": ":$.2f", "resp_pct": ":.1f", "promo_days_count": True},
+                        labels={
+                            "revenue_at_risk_usd": "Ingreso en riesgo (USD, escala logarítmica)",
+                            "resp_pct": "Venta con rebaja frente a precio normal (%, escala logarítmica)",
+                            "promo_days_count": "Días con rebaja",
+                        },
+                        log_x=True,
+                        log_y=True,
+                        opacity=0.7,
+                    )
+                    fig_eq.update_traces(marker=dict(color=APPLE_BLUE, size=8))
+                    fig_eq.add_hline(y=req, line=dict(color=APPLE_RED, width=1.6, dash="dash"))
+                    apply_apple_plotly_theme(fig_eq, height=400, margin=dict(t=24, b=60, l=70, r=24), show_legend=False)
+                    st.plotly_chart(fig_eq, width="stretch", theme=None)
 
         st.markdown('<div class="section-heading" style="margin-top:1.1rem;">Plan de Acción Comercial (Lista Priorizada)</div>', unsafe_allow_html=True)
 
         plan_table_raw = filtered_df.sort_values("revenue_at_risk_usd", ascending=False).copy()
+        ver_todo = st.toggle("Ver todas las columnas", value=False)
         plan_display = plan_table_raw[
             [
                 "display_name",
@@ -1489,8 +2049,13 @@ def main() -> None:
                 "price_sensitivity",
                 "snap_sensitivity",
                 "snap_priority",
+                "aviso",
             ]
         ].copy()
+        if not ver_todo:
+            plan_display = plan_display[
+                ["display_name", "risk_level", "revenue_at_risk_usd", "strategy_short", "suggested_anchor_item", "aviso"]
+            ]
 
         export_cols = [
             "id",
@@ -1512,12 +2077,14 @@ def main() -> None:
             "suggested_anchor_item",
             "snap_tactical_plan",
             "tactical_action",
+            "aviso",
+            "riesgo_vs_28d_usd",
         ]
         csv_bytes = plan_table_raw[export_cols].to_csv(index=False).encode("utf-8-sig")
 
         dl_l, dl_r = st.columns([2.6, 1.0])
         with dl_l:
-            st.caption(f"Mostrando **{len(plan_display):,}** productos ordenados de mayor a menor dinero en riesgo.")
+            st.caption(f"Mostrando **{len(plan_display):,}** productos por tienda, ordenados de mayor a menor ingreso en riesgo.")
         with dl_r:
             st.download_button(
                 label="Descargar plan (.CSV para Excel)",
@@ -1528,6 +2095,22 @@ def main() -> None:
                 width="stretch",
             )
 
+        reposicion = plan_table_raw.loc[
+            plan_table_raw["stockpiling_alert"],
+            ["id", "store_id", "dept_id", "risk_level", "discount_range", "pred_total_28d_units"],
+        ].assign(ajuste_sugerido_post_oferta=AJUSTE_REPOSICION)
+        if not reposicion.empty:
+            st.download_button(
+                label=f"Descargar lista de revisión de reposición ({len(reposicion):,})",
+                data=reposicion.to_csv(index=False).encode("utf-8-sig"),
+                file_name="revision_reposicion_post_oferta.csv",
+                mime="text/csv",
+            )
+            st.caption(
+                f"Solo para revisión manual tras una rebaja: el ajuste {AJUSTE_REPOSICION} es un supuesto de la "
+                "literatura y el tablero no envía alertas a ningún sistema."
+            )
+
         st.dataframe(
             plan_display,
             width="stretch",
@@ -1536,7 +2119,7 @@ def main() -> None:
             column_config={
                 "display_name": "Producto y Tienda",
                 "risk_level": "Prioridad",
-                "revenue_at_risk_usd": st.column_config.NumberColumn("Dinero en riesgo (USD)", format="$%.2f"),
+                "revenue_at_risk_usd": st.column_config.NumberColumn("Ingreso en riesgo (USD)", format="$%.2f"),
                 "projected_decline_pct": st.column_config.NumberColumn("Caída (%)", format="%.1f%%"),
                 "strategy_short": "Estrategia Recomendada",
                 "suggested_anchor_item": "Producto Ancla",
@@ -1549,16 +2132,22 @@ def main() -> None:
                 "price_sensitivity": st.column_config.NumberColumn("Sensibilidad Precio", format="%+.2f"),
                 "snap_sensitivity": st.column_config.NumberColumn("Sensibilidad SNAP", format="%+.2f"),
                 "snap_priority": st.column_config.CheckboxColumn("Prioridad SNAP"),
+                "aviso": "Aviso",
             },
         )
 
     # =======================================================================
     # TAB 4 — 4. RESPALDO IA (AUDITORÍA TÉCNICA PARA DOCENTE)
     # =======================================================================
-    with tab4:
+    for _ in _slot(tab4):
         st.markdown('<div class="section-heading">A. Validación Temporal por Origen Rodante (4 Ventanas × 28 Días)</div>', unsafe_allow_html=True)
         st.caption(
-            "Evaluación metodológica estrictamente cronológica sobre las 5,748 series (d_1830–d_1941) con cero data leakage."
+            f"Evaluación cronológica sobre las {len(diag_df):,} series. Auditoría anti-fuga por muestreo en el paso de preparación."
+        )
+
+        st.info(
+            "Las métricas, la importancia de variables y la tabla de grupos son globales: los filtros no cambian "
+            "esas cifras. Solo el mapa de grupos responde a los filtros."
         )
 
         val_summary = tables["val_summary"]
@@ -1566,15 +2155,11 @@ def main() -> None:
         val_breakdown = tables["val_breakdown"]
         fi_df = tables["feature_importance"]
 
+        ventanas = tables["val_by_window"].drop_duplicates("window").sort_values("window")
         win_choice = st.selectbox(
             "Corte de validación:",
-            options=[
-                "Promedio 4 Ventanas",
-                "Ventana 1 (2016-02-01 a 2016-02-28)",
-                "Ventana 2 (2016-02-29 a 2016-03-27)",
-                "Ventana 3 (2016-03-28 a 2016-04-24)",
-                "Ventana 4 (2016-04-25 a 2016-05-22)",
-            ],
+            options=["Promedio 4 Ventanas"]
+            + [f"Ventana {r.window} ({r.start_date} a {r.end_date})" for r in ventanas.itertuples(index=False)],
         )
 
         if win_choice == "Promedio 4 Ventanas":
@@ -1605,6 +2190,14 @@ def main() -> None:
                 "rf_improvement_vs_model_rmsse_pct": st.column_config.NumberColumn("Mejora RF RMSSE (%)", format="%+.2f%%"),
             },
         )
+
+        with st.container(border=True):
+            st.markdown('<div class="chart-question">¿Gana Random Forest en todas las ventanas?</div>', unsafe_allow_html=True)
+            grafico_error_por_ventana(val_by_window)
+
+        with st.container(border=True):
+            st.markdown('<div class="chart-question">Cuando el modelo avisa una caída, ¿ocurre?</div>', unsafe_allow_html=True)
+            grafico_senal_caida(load_history_90d(), load_predictions()[0])
 
         vc1, vc2 = st.columns(2, gap="medium")
         with vc1:
@@ -1753,6 +2346,10 @@ def main() -> None:
         km_prof = tables["kmeans_profiles"]
         selected_k = int(audits.get("diagnosis", {}).get("kmeans", {}).get("selected_k", 4))
 
+        st.caption(
+            "K se eligió por utilidad comercial. La silueta más alta no corresponde necesariamente al K elegido: "
+            "compare la curva."
+        )
         km_c1, km_c2 = st.columns([1.0, 1.35], gap="medium")
         with km_c1:
             with st.container(border=True):
@@ -1795,7 +2392,7 @@ def main() -> None:
                     y=1.06,
                     xref="x",
                     yref="paper",
-                    text=f"K óptimo = {selected_k}",
+                    text=f"K elegido = {selected_k}",
                     showarrow=False,
                     font=dict(size=11, color=APPLE_RED),
                     bgcolor="#FFF2F2",
@@ -1819,6 +2416,8 @@ def main() -> None:
         with km_c2:
             with st.container(border=True):
                 st.markdown('<div class="chart-question">Mapa de Clústeres: Intermitencia vs Declive Proyectado</div>', unsafe_allow_html=True)
+                if filtered_df.empty:
+                    st.caption("Sin productos con los filtros actuales: el mapa aparece vacío.")
                 scatter_df = filtered_df.copy()
                 scatter_df["size_marker"] = np.clip(scatter_df["revenue_at_risk_usd"], 1.0, None)
                 color_map_clusters = {

@@ -13,6 +13,8 @@ Proyecto analítico reproducible de pronóstico de demanda a 28 días (`RandomFo
 
 El repositorio ya incluye los archivos ligeros procesados (`dashboard_sales_90d.parquet`, `val_window4_predictions.parquet`, `forecast_28d.parquet`) y todas las tablas/métricas en `outputs/`. **No necesitas descargar los 310 MB de Kaggle** para revisar ni ejecutar el dashboard en local:
 
+Requiere **Python 3.11 o superior**. Las vistas se abren con `?vista=gerente`, `?vista=gestor` o `?vista=analista`.
+
 ```bash
 git clone <URL_DEL_REPOSITORIO> && cd walmart-m5-demand-marketing
 pip install -r requirements.txt

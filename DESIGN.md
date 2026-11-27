@@ -65,7 +65,7 @@ Minimalismo editorial de precisión inspirado en las interfaces ejecutivas de Ap
 ## 7. Do's and Don'ts
 
 ### Do
-- Traducir todas las métricas a lenguaje de negocio directo (*"Dinero en riesgo"*, *"Respuesta a rebajas"*, *"Ajuste de reposición"*).
+- Traducir todas las métricas a lenguaje de negocio directo (*"Ingreso en riesgo (USD)"*, *"Respuesta a rebajas"*, *"Ajuste de reposición"*).
 - Construir tarjetas KPI con HTML/CSS Flexbox/Grid propio para mostrar siempre **cifras completas sin truncar** (`$1,156.11`, `-20% a -30%`).
 - Ocultar elementos de interfaz irrelevantes de Streamlit (`Deploy`, menú superior redundante y *footer*), preservando siempre el control de colapso del sidebar.
 - Formatear fechas en Plotly como strings ISO `"YYYY-MM-DD"` con `type="date"` y usar `add_shape` + `add_annotation`.
@@ -92,3 +92,23 @@ Al realizar futuras modificaciones sobre `app/dashboard.py`:
 2. Respetar los tokens de color de la Sección 2, `border-radius: 18px` en tarjetas Bento, `tabular-nums` en cifras y `theme=None` + `plotly_white` en todo gráfico Plotly.
 3. En las pestañas 1–3 usar lenguaje ejecutivo sin sufijos técnicos (`_evaluation`, `d_1941`); concentrar toda la auditoría estadística en la Pestaña 4 (`Respaldo IA`).
 4. Verificar siempre con `AppTest`, auditoría de fechas ISO en la Pestaña 2 y prueba headless antes de finalizar.
+
+---
+
+## 10. Vistas por tipo de usuario
+
+Esta sección prevalece sobre el flujo de pestañas de la Sección 5 y sobre las reglas de lenguaje de las Secciones 7 y 9 cuando haya diferencias. La vista cambia pestañas, filtros iniciales y vocabulario; **nunca los cálculos**. Los perfiles son supuestos de diseño pendientes de validar con usuarios.
+
+| Vista (`?vista=`) | Pestañas | Filtros iniciales | Vocabulario |
+|---|---|---|---|
+| Gerente de marketing (`gerente`) | Resumen Ejecutivo · Decisión por Producto | Todo el portafolio | Venta conjunta, rebaja temporal, precio habitual |
+| Gestor de categoría o precios (`gestor`) | Cartera de Decisiones · Decisión por Producto · Simulador y Plan | Riesgo alto y medio; rebaja y venta cruzada; dinero en riesgo mayor que $0 | Rebaja táctica (markdown), venta cruzada, FEFO, EDLP |
+| Analista o docente (`analista`) | Respaldo IA · Resumen de Negocio · Decisión por Producto · Simulador y Plan | Todo el portafolio | Términos técnicos (SES, MA28, ε, RMSE) |
+
+Reglas de honestidad:
+- El simulador compara el ingreso sin y con rebaja; nunca presenta como ganancia solo las unidades adicionales.
+- La respuesta del consumidor (ε) es un supuesto, no una medición.
+- "Sin historial de rebajas" se distingue de "respuesta baja o negativa".
+- La señal de caída se muestra con su referencia y su sensibilidad al periodo base.
+- La métrica monetaria se llama «Ingreso en riesgo (USD)» en todas las vistas.
+- Cortes de las rejillas: 1100 px y 768 px.

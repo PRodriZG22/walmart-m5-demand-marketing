@@ -3,7 +3,7 @@
 **Universidad Nacional de Cañete (UNDC) — 2026**  
 **Curso:** Inteligencia Artificial Aplicada al Marketing Digital
 
-> 🌐 **Dashboard público en Streamlit Community Cloud:** `[[Pegar aquí el enlace público cuando esté desplegado]](https://walmart-m5-california.streamlit.app/)`
+> 🌐 **Dashboard público en Streamlit Community Cloud:** `https://walmart-m5-california.streamlit.app/`
 
 Proyecto analítico reproducible de pronóstico de demanda a 28 días (`RandomForestRegressor`), diagnóstico de riesgo comercial (Ingreso en Riesgo en USD), segmentación de portafolio (`K-Means`) y motor prescriptivo de acciones promocionales (Precios Dinámicos/Markdown, Cross-Selling Omnicanal y Sincronización SNAP), basado exclusivamente en datos reales del dataset **Kaggle M5 Forecasting** (`FOODS` en California: `CA_1`, `CA_2`, `CA_3`, `CA_4` — 1,437 productos × 4 tiendas = 5,748 series producto-tienda).
 
